@@ -2,7 +2,6 @@ package com.student.backend.model;
 
 import jakarta.persistence.*;
 
-//репо
 //сервисы
 //контроллеры
 //мапперы
