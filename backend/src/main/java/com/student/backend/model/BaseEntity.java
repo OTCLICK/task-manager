@@ -2,10 +2,7 @@ package com.student.backend.model;
 
 import jakarta.persistence.*;
 
-//ВАЛИДАЦИЯ
-//INHERITANCE
-//КОНСТРУКТОРЫ
-//JUNCTION TABLE
+//postgres
 @MappedSuperclass
 public abstract class BaseEntity {
     private String id;

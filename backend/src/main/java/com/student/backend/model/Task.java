@@ -15,9 +15,9 @@ public class Task extends BaseEntity {
 
     private String description;
 
-    private TaskPriority priority = TaskPriority.MEDIUM;
+    private TaskPriority priority;
 
-    private TaskStatus status = TaskStatus.CREATED;
+    private TaskStatus status;
 
     private Zone zone;
 
@@ -35,6 +35,8 @@ public class Task extends BaseEntity {
     public Task(String title, String description, TaskPriority priority, User coordinator, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.title = title;
         this.description = description;
+        this.priority = priority != null ? priority : TaskPriority.MEDIUM;
+        this.status = TaskStatus.CREATED;
         this.priority = priority;
         this.coordinator = coordinator;
         this.createdAt = createdAt;
