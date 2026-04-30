@@ -3,7 +3,6 @@ package com.student.backend.model;
 import jakarta.persistence.*;
 
 //контроллеры
-//мапперы
 //exception handlers
 //auth
 @MappedSuperclass
