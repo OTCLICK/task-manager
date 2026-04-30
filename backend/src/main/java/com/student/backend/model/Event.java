@@ -14,7 +14,7 @@ public class Event extends BaseEntity {
 
     private int participatesCount;
 
-    private EventStatus status = EventStatus.PLANNED;
+    private EventStatus status;
 
     private LocalDateTime startTime;
     private LocalDateTime endTime;
@@ -23,9 +23,10 @@ public class Event extends BaseEntity {
 
     protected Event() {}
 
-    public Event(String name, String address, LocalDateTime startTime, LocalDateTime endTime, User organizer) {
+    public Event(String name, String address, EventStatus status, LocalDateTime startTime, LocalDateTime endTime, User organizer) {
         this.name = name;
         this.address = address;
+        this.status = status != null ? status : EventStatus.PLANNED;
         this.startTime = startTime;
         this.endTime = endTime;
         this.organizer = organizer;

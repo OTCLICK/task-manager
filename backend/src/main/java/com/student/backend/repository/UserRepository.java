@@ -1,6 +1,5 @@
 package com.student.backend.repository;
 
-import com.student.backend.model.FullName;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;

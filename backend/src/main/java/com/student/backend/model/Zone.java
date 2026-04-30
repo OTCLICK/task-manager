@@ -19,9 +19,10 @@ public class Zone extends BaseEntity {
 
     protected Zone() {}
 
-    public Zone(String name, String description, Event event, User coordinator) {
+    public Zone(String name, String description, int participatesCount, Event event, User coordinator) {
         this.name = name;
         this.description = description;
+        this.participatesCount = participatesCount;
         this.event = event;
         this.coordinator = coordinator;
     }

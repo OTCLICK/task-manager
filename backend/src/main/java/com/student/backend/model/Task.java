@@ -37,7 +37,6 @@ public class Task extends BaseEntity {
         this.description = description;
         this.priority = priority != null ? priority : TaskPriority.MEDIUM;
         this.status = TaskStatus.CREATED;
-        this.priority = priority;
         this.coordinator = coordinator;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
