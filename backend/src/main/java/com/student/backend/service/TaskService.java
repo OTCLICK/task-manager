@@ -1,6 +1,9 @@
 package com.student.backend.service;
 
 import com.student.backend.dto.*;
+import com.student.backend.exception.AccessDeniedException;
+import com.student.backend.exception.NotFoundException;
+import com.student.backend.exception.ValidationException;
 import com.student.backend.model.*;
 import com.student.backend.repository.TaskRepository;
 import com.student.backend.repository.UserRepository;
@@ -38,16 +41,16 @@ public class TaskService {
     @Transactional(readOnly = true)
     public TaskResponse getTaskById(String id) {
         Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Задача не найдена: " + id));
+                .orElseThrow(() -> new NotFoundException("Задача не найдена"));
         return toTaskResponse(task);
     }
 
     public TaskResponse createTask(TaskCreateRequest request, String coordinatorId, String zoneId) {
         User coordinator = userRepository.findById(coordinatorId)
-                .orElseThrow(() -> new IllegalArgumentException("Координатор не найден: " + coordinatorId));
+                .orElseThrow(() -> new NotFoundException("Координатор не найден"));
 
         if (coordinator.getRole() != UserRole.COORDINATOR) {
-            throw new IllegalArgumentException("Только координатор может создавать задачи");
+            throw new AccessDeniedException("Только координатор может создавать задачи");
         }
 
         Task task = new Task(
@@ -61,7 +64,7 @@ public class TaskService {
 
         if (request.zoneId() != null) {
             Zone zone = zoneRepository.findById(request.zoneId())
-                    .orElseThrow(() -> new IllegalArgumentException("Зона не найдена: " + request.zoneId()));
+                    .orElseThrow(() -> new NotFoundException("Зона не найдена"));
             task.setZone(zone);
         }
 
@@ -70,11 +73,11 @@ public class TaskService {
         if (request.performers() != null && !request.performers().isEmpty()) {
             List<User> performers = userRepository.findAllById(request.performers());
             if (performers.size() != request.performers().size()) {
-                throw new IllegalArgumentException("Один или несколько исполнителей не найдены");
+                throw new NotFoundException("Один или несколько исполнителей не найдены");
             }
             for (User performer : performers) {
                 if (performer.getRole() != UserRole.PERFORMER) {
-                    throw new IllegalArgumentException("Исполнитель должен иметь роль PERFORMER: " + performer.getId());
+                    throw new ValidationException("Исполнитель должен иметь роль PERFORMER");
                 }
             }
             task.setPerformers(performers);
@@ -86,7 +89,7 @@ public class TaskService {
 
     public void deleteTask(String id) {
         if (!taskRepository.existsById(id)) {
-            throw new IllegalArgumentException("Задача не найдена: " + id);
+            throw new NotFoundException("Задача не найдена");
         }
         taskRepository.deleteById(id);
     }

@@ -4,6 +4,9 @@ import com.student.backend.dto.EventCreateRequest;
 import com.student.backend.dto.EventResponse;
 import com.student.backend.dto.FullNameDto;
 import com.student.backend.dto.UserResponse;
+import com.student.backend.exception.AccessDeniedException;
+import com.student.backend.exception.NotFoundException;
+import com.student.backend.exception.ValidationException;
 import com.student.backend.model.Event;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
@@ -37,16 +40,16 @@ public class EventService {
     @Transactional(readOnly = true)
     public EventResponse getEventById(String id) {
         Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Мероприятие не найдено: " + id));
+                .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
         return toEventResponse(event);
     }
 
     public EventResponse createEvent(EventCreateRequest request, String organizerId) {
         User organizer = userRepository.findById(organizerId)
-                .orElseThrow(() -> new IllegalArgumentException("Организатор не найден: " + organizerId));
+                .orElseThrow(() -> new NotFoundException("Организатор не найден"));
 
         if (organizer.getRole() != UserRole.ORGANIZER) {
-            throw new IllegalArgumentException("Только организатор может создавать мероприятия");
+            throw new AccessDeniedException("Только организатор может создавать мероприятия");
         }
 
         Event event = new Event(
@@ -64,7 +67,7 @@ public class EventService {
 
     public void deleteEvent(String id) {
         if (!eventRepository.existsById(id)) {
-            throw new IllegalArgumentException("Мероприятие не найдено: " + id);
+            throw new NotFoundException("Мероприятие не найдено");
         }
         eventRepository.deleteById(id);
     }

@@ -1,6 +1,8 @@
 package com.student.backend.service;
 
 import com.student.backend.dto.*;
+import com.student.backend.exception.NotFoundException;
+import com.student.backend.exception.ValidationException;
 import com.student.backend.model.Event;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
@@ -40,19 +42,19 @@ public class ZoneService {
     @Transactional(readOnly = true)
     public ZoneResponse getZoneById(String id) {
         Zone zone = zoneRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Зона не найдена: " + id));
+                .orElseThrow(() -> new NotFoundException("Зона не найдена"));
         return toZoneResponse(zone);
     }
 
     public ZoneResponse createZone(ZoneCreateRequest request, String eventId, String coordinatorId) {
         Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Мероприятие не найдено: " + eventId));
+                .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
 
         User coordinator = userRepository.findById(coordinatorId)
-                .orElseThrow(() -> new IllegalArgumentException("Координатор не найден: " + coordinatorId));
+                .orElseThrow(() -> new NotFoundException("Координатор не найден"));
 
         if (coordinator.getRole() != UserRole.COORDINATOR) {
-            throw new IllegalArgumentException("Пользователь должен быть координатором");
+            throw new ValidationException("Пользователь должен быть координатором");
         }
 
         Zone zone = new Zone(
@@ -69,7 +71,7 @@ public class ZoneService {
 
     public void deleteZone(String id) {
         if (!zoneRepository.existsById(id)) {
-            throw new IllegalArgumentException("Зона не найдена: " + id);
+            throw new NotFoundException("Зона не найдена");
         }
         zoneRepository.deleteById(id);
     }

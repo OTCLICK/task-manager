@@ -2,9 +2,6 @@ package com.student.backend.model;
 
 import jakarta.persistence.*;
 
-//контроллеры
-//exception handlers
-//auth
 @MappedSuperclass
 public abstract class BaseEntity {
     private String id;

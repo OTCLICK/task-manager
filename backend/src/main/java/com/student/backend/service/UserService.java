@@ -2,6 +2,7 @@ package com.student.backend.service;
 
 import com.student.backend.dto.FullNameDto;
 import com.student.backend.dto.UserResponse;
+import com.student.backend.exception.NotFoundException;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
 import com.student.backend.repository.UserRepository;
@@ -24,7 +25,7 @@ public class UserService {
     @Transactional(readOnly = true)
     public UserResponse findById(String id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
+                .orElseThrow(() -> new NotFoundException("Пользователь не найден"));
         return toUserResponse(user);
     }
 
@@ -54,7 +55,7 @@ public class UserService {
 
     public void deleteById(String id) {
         if (!userRepository.existsById(id)) {
-            throw new IllegalArgumentException("Пользователь не найден: " + id);
+            throw new NotFoundException("Пользователь не найден");
         }
         userRepository.deleteById(id);
     }
