@@ -42,10 +42,10 @@ public class UserController {
         return ResponseEntity.ok(users);
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
-        // TODO: Требуется авторизация - только админ может удалять пользователей
-        userService.deleteById(id);
-        return ResponseEntity.noContent().build();
-    }
+//    @DeleteMapping("/{id}")
+//    public ResponseEntity<Void> deleteUser(@PathVariable String id) {
+//        // TODO: Требуется авторизация - только админ может удалять пользователей
+//        userService.deleteById(id);
+//        return ResponseEntity.noContent().build();
+//    }
 }

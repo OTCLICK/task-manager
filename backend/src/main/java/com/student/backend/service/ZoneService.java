@@ -1,6 +1,7 @@
 package com.student.backend.service;
 
 import com.student.backend.dto.*;
+import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
 import com.student.backend.exception.ValidationException;
 import com.student.backend.model.Event;
@@ -69,9 +70,12 @@ public class ZoneService {
         return toZoneResponse(savedZone);
     }
 
-    public void deleteZone(String id) {
-        if (!zoneRepository.existsById(id)) {
-            throw new NotFoundException("Зона не найдена");
+    public void deleteZone(String id, String coordinatorId) {
+        Zone zone = zoneRepository.findById(id)
+                        .orElseThrow(() -> new NotFoundException("Зона не найдена"));
+
+        if (!zone.getCoordinator().getId().equals(coordinatorId)) {
+            throw new AccessDeniedException("Недостаточно прав для удаления зоны");
         }
         zoneRepository.deleteById(id);
     }

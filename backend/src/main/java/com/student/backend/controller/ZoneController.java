@@ -2,6 +2,7 @@ package com.student.backend.controller;
 
 import com.student.backend.dto.ZoneCreateRequest;
 import com.student.backend.dto.ZoneResponse;
+import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.ZoneService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,11 @@ import java.util.List;
 public class ZoneController {
 
     private final ZoneService zoneService;
+    private final SecurityUtils securityUtils;
 
-    public ZoneController(ZoneService zoneService) {
+    public ZoneController(ZoneService zoneService, SecurityUtils securityUtils) {
         this.zoneService = zoneService;
+        this.securityUtils = securityUtils;
     }
 
     @GetMapping
@@ -32,22 +35,19 @@ public class ZoneController {
         return ResponseEntity.ok(zone);
     }
 
-    // TODO: Требуется авторизация - только координатор может создавать зоны
-    // Временно используем параметры eventId и coordinatorId для тестирования
     @PostMapping
     public ResponseEntity<ZoneResponse> createZone(
-            @Valid @RequestBody ZoneCreateRequest request,
-            @RequestParam String eventId,
-            @RequestParam String coordinatorId
+            @Valid @RequestBody ZoneCreateRequest request
     ) {
-        ZoneResponse zone = zoneService.createZone(request, eventId, coordinatorId);
+        String coordinatorId = securityUtils.getCurrentUserId();
+        ZoneResponse zone = zoneService.createZone(request, request.eventId(), coordinatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(zone);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteZone(@PathVariable String id) {
-        // TODO: Требуется авторизация - только создатель зоны может её удалить
-        zoneService.deleteZone(id);
+        String coordinatorId = securityUtils.getCurrentUserId();
+        zoneService.deleteZone(id,  coordinatorId);
         return ResponseEntity.noContent().build();
     }
 }

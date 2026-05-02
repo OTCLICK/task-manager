@@ -2,6 +2,7 @@ package com.student.backend.controller;
 
 import com.student.backend.dto.EventCreateRequest;
 import com.student.backend.dto.EventResponse;
+import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.EventService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,11 @@ import java.util.List;
 public class EventController {
 
     private final EventService eventService;
+    private final SecurityUtils securityUtils;
 
-    public EventController(EventService eventService) {
+    public EventController(EventService eventService, SecurityUtils securityUtils) {
         this.eventService = eventService;
+        this.securityUtils = securityUtils;
     }
 
     @GetMapping
@@ -32,19 +35,17 @@ public class EventController {
         return ResponseEntity.ok(event);
     }
 
-//    TODO:
     @PostMapping
-    public ResponseEntity<EventResponse> createEvent(
-            @Valid @RequestBody EventCreateRequest request,
-            @RequestParam String organizerId // временно, пока нет авторизации
-    ) {
+    public ResponseEntity<EventResponse> createEvent(@Valid @RequestBody EventCreateRequest request) {
+        String organizerId = securityUtils.getCurrentUserId();
         EventResponse event = eventService.createEvent(request, organizerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(event);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEvent(@PathVariable String id) {
-        eventService.deleteEvent(id);
+        String organizerId = securityUtils.getCurrentUserId();
+        eventService.deleteEvent(id,  organizerId);
         return ResponseEntity.noContent().build();
     }
 }

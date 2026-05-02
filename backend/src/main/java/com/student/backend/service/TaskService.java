@@ -87,9 +87,12 @@ public class TaskService {
         return toTaskResponse(savedTask);
     }
 
-    public void deleteTask(String id) {
-        if (!taskRepository.existsById(id)) {
-            throw new NotFoundException("Задача не найдена");
+    public void deleteTask(String id, String coordinatorId) {
+        Task task = taskRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Задача не найдена"));
+
+        if (!task.getCoordinator().getId().equals(coordinatorId)) {
+            throw new AccessDeniedException("Недостаточно прав для удаления задачи");
         }
         taskRepository.deleteById(id);
     }

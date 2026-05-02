@@ -6,7 +6,6 @@ import com.student.backend.dto.FullNameDto;
 import com.student.backend.dto.UserResponse;
 import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
-import com.student.backend.exception.ValidationException;
 import com.student.backend.model.Event;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
@@ -65,9 +64,12 @@ public class EventService {
         return toEventResponse(savedEvent);
     }
 
-    public void deleteEvent(String id) {
-        if (!eventRepository.existsById(id)) {
-            throw new NotFoundException("Мероприятие не найдено");
+    public void deleteEvent(String id, String organizerId) {
+        Event event = eventRepository.findById(id)
+                        .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
+
+        if (!event.getOrganizer().getId().equals(organizerId)) {
+            throw new AccessDeniedException("Недостаточно прав для удаления мероприятия");
         }
         eventRepository.deleteById(id);
     }

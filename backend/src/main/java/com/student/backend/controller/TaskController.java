@@ -2,6 +2,7 @@ package com.student.backend.controller;
 
 import com.student.backend.dto.TaskCreateRequest;
 import com.student.backend.dto.TaskResponse;
+import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.TaskService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,11 @@ import java.util.List;
 public class TaskController {
 
     private final TaskService taskService;
+    private final SecurityUtils securityUtils;
 
-    public TaskController(TaskService taskService) {
+    public TaskController(TaskService taskService, SecurityUtils securityUtils) {
         this.taskService = taskService;
+        this.securityUtils = securityUtils;
     }
 
     @GetMapping
@@ -32,22 +35,19 @@ public class TaskController {
         return ResponseEntity.ok(task);
     }
 
-    // TODO: Требуется авторизация - только координатор может создавать задачи
-    // Временно используем параметр coordinatorId для тестирования
     @PostMapping
     public ResponseEntity<TaskResponse> createTask(
-            @Valid @RequestBody TaskCreateRequest request,
-            @RequestParam String coordinatorId,
-            @RequestParam(required = false) String zoneId // опциональный параметр
+            @Valid @RequestBody TaskCreateRequest request
     ) {
-        TaskResponse task = taskService.createTask(request, coordinatorId, zoneId);
+        String coordinatorId = securityUtils.getCurrentUserId();
+        TaskResponse task = taskService.createTask(request, coordinatorId, request.zoneId());
         return ResponseEntity.status(HttpStatus.CREATED).body(task);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(@PathVariable String id) {
-        // TODO: Требуется авторизация - только создатель задачи может её удалить
-        taskService.deleteTask(id);
+        String coordinatorId = securityUtils.getCurrentUserId();
+        taskService.deleteTask(id, coordinatorId);
         return ResponseEntity.noContent().build();
     }
 }

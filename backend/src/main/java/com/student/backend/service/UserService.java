@@ -53,12 +53,12 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    public void deleteById(String id) {
-        if (!userRepository.existsById(id)) {
-            throw new NotFoundException("Пользователь не найден");
-        }
-        userRepository.deleteById(id);
-    }
+//    public void deleteById(String id) {
+//        if (!userRepository.existsById(id)) {
+//            throw new NotFoundException("Пользователь не найден");
+//        }
+//        userRepository.deleteById(id);
+//    }
 
     private UserResponse toUserResponse(User user) {
         return new UserResponse(

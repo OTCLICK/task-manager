@@ -14,6 +14,9 @@ public record ZoneCreateRequest(
         String description,
 
         @PositiveOrZero(message = "Количество участников не может быть отрицательным")
-        int participatesCount
+        int participatesCount,
+
+        @NotBlank
+        String eventId
 ) {
 }
