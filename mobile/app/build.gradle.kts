@@ -64,6 +64,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.retrofit2)
     implementation(libs.converter.moshi)
+    implementation("com.squareup.moshi:moshi-kotlin:1.15.0")
 
     implementation(libs.kotlinx.coroutines.android)
 
