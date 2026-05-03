@@ -58,10 +58,12 @@ public class ZoneService {
             throw new ValidationException("Пользователь должен быть координатором");
         }
 
+        int participatesCount = (request.participatesCount() != null) ? request.participatesCount() : 0;
+
         Zone zone = new Zone(
                 request.name(),
                 request.description(),
-                request.participatesCount(),
+                participatesCount,
                 event,
                 coordinator
         );

@@ -32,12 +32,14 @@ public class Task extends BaseEntity {
 
     protected Task() {}
 
-    public Task(String title, String description, TaskPriority priority, User coordinator, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public Task(String title, String description, TaskPriority priority, Zone zone, User coordinator, LocalDateTime deadline, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.title = title;
         this.description = description;
         this.priority = priority != null ? priority : TaskPriority.MEDIUM;
         this.status = TaskStatus.CREATED;
+        this.zone = zone;
         this.coordinator = coordinator;
+        this.deadline = deadline;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }

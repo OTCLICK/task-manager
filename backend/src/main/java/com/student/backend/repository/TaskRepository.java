@@ -25,9 +25,9 @@ public interface TaskRepository extends JpaRepository<Task,String> {
 
     List<Task> findByZoneId(String zoneId);
 
-    List<Task> findByPerformer(User performer);
+    List<Task> findByPerformers(User performer);
 
-    List<Task> findByPerformerId(String performerId);
+    List<Task> findByPerformersId(String performerId);
 
     List<Task> findByCoordinator(User coordinator);
 

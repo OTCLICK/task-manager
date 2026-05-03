@@ -8,14 +8,14 @@ import java.time.LocalDateTime;
 public record EventCreateRequest(
 
         @NotBlank(message = "Название мероприятия не должно быть пустым")
-        @Size(max = 40, message = "Название мероприятия не должно превышать 40 символов")
+        @Size(max = 80, message = "Название мероприятия не должно превышать 80 символов")
         String name,
 
         @NotBlank(message = "Адрес мероприятия не должен быть пустым")
         String address,
 
         @PositiveOrZero(message = "Количество участников не может быть отрицательным")
-        int participatesCount,
+        Integer participatesCount,
 
         EventStatus status,
 

@@ -2,6 +2,7 @@ package com.student.backend.model;
 
 import jakarta.persistence.*;
 
+// Integer participatesCount
 @MappedSuperclass
 public abstract class BaseEntity {
     private String id;

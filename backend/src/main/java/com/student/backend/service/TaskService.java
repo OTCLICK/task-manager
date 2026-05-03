@@ -49,26 +49,37 @@ public class TaskService {
         User coordinator = userRepository.findById(coordinatorId)
                 .orElseThrow(() -> new NotFoundException("Координатор не найден"));
 
+//        Zone zone = zoneRepository.findById(zoneId)
+//                .orElseThrow(() -> new NotFoundException("Зона не найдена"));
+
         if (coordinator.getRole() != UserRole.COORDINATOR) {
             throw new AccessDeniedException("Только координатор может создавать задачи");
+        }
+
+        Zone zone = null;
+        if (zoneId != null) {
+            zone = zoneRepository.findById(zoneId)
+                    .orElseThrow(() -> new NotFoundException("Зона не найдена"));
         }
 
         Task task = new Task(
                 request.title(),
                 request.description(),
                 request.taskPriority() != null ? request.taskPriority() : TaskPriority.MEDIUM,
+                zone,
                 coordinator,
+                request.deadline(),
                 LocalDateTime.now(),
                 LocalDateTime.now()
         );
 
-        if (request.zoneId() != null) {
-            Zone zone = zoneRepository.findById(request.zoneId())
-                    .orElseThrow(() -> new NotFoundException("Зона не найдена"));
-            task.setZone(zone);
-        }
-
-        task.setDeadline(request.deadline());
+//        if (request.zoneId() != null) {
+//            Zone zone = zoneRepository.findById(request.zoneId())
+//                    .orElseThrow(() -> new NotFoundException("Зона не найдена"));
+//            task.setZone(zone);
+//        }
+//
+//        task.setDeadline(request.deadline());
 
         if (request.performers() != null && !request.performers().isEmpty()) {
             List<User> performers = userRepository.findAllById(request.performers());

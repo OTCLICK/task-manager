@@ -51,9 +51,12 @@ public class EventService {
             throw new AccessDeniedException("Только организатор может создавать мероприятия");
         }
 
+        int participatesCount = (request.participatesCount() != null) ? request.participatesCount() : 0;
+
         Event event = new Event(
                 request.name(),
                 request.address(),
+                participatesCount,
                 request.status(),
                 request.startTime(),
                 request.endTime(),
