@@ -3,43 +3,42 @@ package com.example.mobile.data.api
 import com.example.mobile.utils.Constants
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
 object ApiClient {
-
     private fun createMoshi(): Moshi {
         return Moshi.Builder()
             .add(KotlinJsonAdapterFactory())
             .build()
     }
 
-    private fun createOkHttpClient(tokenProvider: (() -> String?)? = null): OkHttpClient {
-        val builder = OkHttpClient.Builder()
+    fun createApiService(): ApiService {
+        val retrofit = Retrofit.Builder()
+            .baseUrl(Constants.BASE_URL)
+            .client(OkHttpClient())
+            .addConverterFactory(MoshiConverterFactory.create(createMoshi()))
+            .build()
 
-        tokenProvider?.let { provider ->
-            val authInterceptor = Interceptor { chain ->
+        return retrofit.create(ApiService::class.java)
+    }
+
+    // TODO: позже использовать
+    fun createAuthorizedApiService(authToken: String): ApiService {
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor { chain ->
                 val original = chain.request()
                 val authorized = original.newBuilder()
-                    .addHeader(
-                        Constants.AUTHORIZATION_HEADER,
-                        "${Constants.BEARER_PREFIX}${provider()}"
-                    )
+                    .addHeader(Constants.AUTHORIZATION_HEADER, "${Constants.BEARER_PREFIX}$authToken")
                     .build()
                 chain.proceed(authorized)
             }
-            builder.addInterceptor(authInterceptor)
-        }
+            .build()
 
-        return builder.build()
-    }
-
-    fun createApiService(tokenProvider: (() -> String?)? = null): ApiService {
         val retrofit = Retrofit.Builder()
             .baseUrl(Constants.BASE_URL)
-            .client(createOkHttpClient(tokenProvider))
+            .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(createMoshi()))
             .build()
 
