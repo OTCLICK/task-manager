@@ -14,6 +14,7 @@ import com.example.mobile.presentation.viewmodel.AuthViewModel
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
+    onNavigateToRegister: () -> Unit,
     viewModel: AuthViewModel
 ) {
     val loginState by viewModel.loginState.collectAsState()
@@ -61,7 +62,8 @@ fun LoginScreen(
         password = password,
         onPasswordChange = { password = it },
         isLoading = isLoading,
-        onLoginClick = { viewModel.login(email, password) }
+        onLoginClick = { viewModel.login(email, password) },
+        onNavigateToRegister = onNavigateToRegister
     )
 }
 
@@ -72,7 +74,8 @@ private fun LoginContent(
     password: String,
     onPasswordChange: (String) -> Unit,
     isLoading: Boolean,
-    onLoginClick: () -> Unit
+    onLoginClick: () -> Unit,
+    onNavigateToRegister: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -125,7 +128,9 @@ private fun LoginContent(
             text = "Нет аккаунта? Зарегистрироваться",
             modifier = Modifier
                 .padding(top = 16.dp)
-                .clickable { /* TODO: Navigate to register */ },
+                .clickable {
+                    onNavigateToRegister()
+                },
             color = MaterialTheme.colorScheme.primary
         )
     }

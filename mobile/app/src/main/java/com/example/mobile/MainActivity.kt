@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.mobile.presentation.ui.LoginScreen
+import com.example.mobile.presentation.ui.RegisterScreen
 import com.example.mobile.presentation.ui.theme.MobileTheme
 import com.example.mobile.presentation.viewmodel.AuthViewModelFactory
 import com.example.mobile.utils.TokenManager
@@ -38,6 +39,14 @@ class MainActivity : ComponentActivity() {
                                 onLoginSuccess = {
                                     // TODO: навигация на основе роли пользователя
                                 },
+                                onNavigateToRegister = { navController.navigate("register") },
+                                viewModel = viewModel
+                            )
+                        }
+                        composable("register") {
+                            RegisterScreen(
+                                onRegisterSuccess = { /* TODO */ },
+                                onNavigateToLogin = { navController.navigate("login") },
                                 viewModel = viewModel
                             )
                         }
