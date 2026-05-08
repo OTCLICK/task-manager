@@ -14,26 +14,26 @@ public class User extends BaseEntity {
 
     private FullName fullName;
 
-    private UserRole role;
+//    private UserRole role;
 
     protected User() {}
 
-    public User(String email, String password, FullName fullName, UserRole role) {
+    public User(String email, String password, FullName fullName/*, UserRole role*/) {
         this.email = email;
         this.password = password;
         this.fullName = fullName;
-        this.role = role;
+//        this.role = role;
     }
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    public UserRole getRole() {
-        return role;
-    }
-
-    public void setRole(UserRole role) {
-        this.role = role;
-    }
+//    @Enumerated(EnumType.STRING)
+//    @Column(nullable = false)
+//    public UserRole getRole() {
+//        return role;
+//    }
+//
+//    public void setRole(UserRole role) {
+//        this.role = role;
+//    }
 
     @Embedded
     public FullName getFullName() {

@@ -36,11 +36,11 @@ public class UserController {
         return ResponseEntity.ok(users);
     }
 
-    @GetMapping("/role/{role}")
-    public ResponseEntity<List<UserResponse>> getUsersByRole(@PathVariable UserRole role) {
-        List<UserResponse> users = userService.findByRole(role);
-        return ResponseEntity.ok(users);
-    }
+//    @GetMapping("/role/{role}")
+//    public ResponseEntity<List<UserResponse>> getUsersByRole(@PathVariable UserRole role) {
+//        List<UserResponse> users = userService.findByRole(role);
+//        return ResponseEntity.ok(users);
+//    }
 
 //    @DeleteMapping("/{id}")
 //    public ResponseEntity<Void> deleteUser(@PathVariable String id) {

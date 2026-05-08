@@ -26,4 +26,6 @@ public interface ZoneRepository extends JpaRepository<Zone, String> {
 
     List<Zone> findByCoordinatorId(User coordinatorId);
 
+//    Optional<Zone> findByTaskId(String taskId);
+
 }

@@ -40,7 +40,7 @@ public class ZoneController {
             @Valid @RequestBody ZoneCreateRequest request
     ) {
         String coordinatorId = securityUtils.getCurrentUserId();
-        ZoneResponse zone = zoneService.createZone(request, request.eventId(), coordinatorId);
+        ZoneResponse zone = zoneService.createZone(request/*, request.eventId()*/, coordinatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(zone);
     }
 

@@ -1,46 +1,69 @@
 package com.student.backend.storage;
 
-import com.student.backend.model.FullName;
-import com.student.backend.model.User;
-import com.student.backend.model.UserRole;
+import com.student.backend.model.*;
+import com.student.backend.repository.EventRepository;
+import com.student.backend.repository.ParticipationRepository;
 import com.student.backend.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDateTime;
+
 @Configuration
 public class InitDataLoader {
+
     @Bean
-    public CommandLineRunner initData(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public CommandLineRunner initData(
+            UserRepository userRepository,
+            EventRepository eventRepository,
+            ParticipationRepository participationRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         return args -> {
             if (userRepository.count() == 0) {
-                createUser(userRepository, passwordEncoder, "organizer@example.com", "OrganizerPass1!",
-                        "Организатор", "Организаторов", "Организаторович", UserRole.ORGANIZER);
+                User organizer = createUser(userRepository, passwordEncoder,
+                        "organizer@example.com", "OrganizerPass1!",
+                        "Организатор", "Организаторов", "Организаторович");
 
-                createUser(userRepository, passwordEncoder, "coordinator@example.com", "CoordinatorPass1!",
-                        "Координатор", "Координаторов", "Координаторович", UserRole.COORDINATOR);
+                User coordinator = createUser(userRepository, passwordEncoder,
+                        "coordinator@example.com", "CoordinatorPass1!",
+                        "Координатор", "Координаторов", "Координаторович");
 
-                createUser(userRepository, passwordEncoder, "performer@example.com", "PerformerPass1!",
-                        "Исполнитель", "Исполнительев", "Исполнительевич", UserRole.PERFORMER);
+                User performer = createUser(userRepository, passwordEncoder,
+                        "performer@example.com", "PerformerPass1!",
+                        "Исполнитель", "Исполнительев", "Исполнительевич");
 
-                System.out.println("Тестовые пользователи созданы:");
-                System.out.println("Организатор: organizer@example.com / OrganizerPass1!");
-                System.out.println("Координатор: coordinator@example.com / CoordinatorPass1!");
-                System.out.println("Исполнитель: performer@example.com / PerformerPass1!");
+                Event event = new Event(
+                        "Тестовое мероприятие",
+                        "г. Москва, ул. Тестовая, д. 1",
+                        100,
+                        EventStatus.PLANNED,
+                        LocalDateTime.now(),
+                        LocalDateTime.now().plusDays(30),
+                        organizer
+                );
+                eventRepository.save(event);
+
+                participationRepository.save(new Participation(organizer, event, UserRole.ORGANIZER));
+                participationRepository.save(new Participation(coordinator, event, UserRole.COORDINATOR));
+                participationRepository.save(new Participation(performer, event, UserRole.PERFORMER));
+
+                System.out.println("Тестовые данные созданы:");
+                System.out.println("Пользователи: organizer@example.com, coordinator@example.com, performer@example.com");
+                System.out.println("Мероприятие: \"Тестовое мероприятие\"");
             }
         };
     }
 
-    private void createUser(UserRepository userRepository, PasswordEncoder passwordEncoder,
-                            String email, String password, String name, String surname,
-                            String patronymic, UserRole role) {
+    private User createUser(UserRepository userRepository, PasswordEncoder passwordEncoder,
+                            String email, String password, String name, String surname, String patronymic) {
         User user = new User(
                 email,
                 passwordEncoder.encode(password),
-                new FullName(name, surname, patronymic),
-                role
+                new FullName(name, surname, patronymic)
         );
-        userRepository.save(user);
+        return userRepository.save(user);
     }
 }

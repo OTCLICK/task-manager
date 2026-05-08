@@ -21,4 +21,6 @@ public interface EventRepository extends JpaRepository<Event, String> {
 
     void deleteById(String id);
 
+//    Optional<Event> findByZoneId(String zoneId);
+
 }

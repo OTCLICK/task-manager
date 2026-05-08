@@ -25,6 +25,6 @@ public interface UserRepository extends JpaRepository<User, String> {
             "(u.fullName.patronymic IS NOT NULL AND LOWER(u.fullName.patronymic) LIKE LOWER(CONCAT('%', :query, '%')))")
     List<User> searchByFullNameSubstring(@Param("query") String query);
 
-    List<User> findByRole(UserRole role);
+//    List<User> findByRole(UserRole role);
 
 }

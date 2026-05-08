@@ -40,7 +40,7 @@ public class TaskController {
             @Valid @RequestBody TaskCreateRequest request
     ) {
         String coordinatorId = securityUtils.getCurrentUserId();
-        TaskResponse task = taskService.createTask(request, coordinatorId, request.zoneId());
+        TaskResponse task = taskService.createTask(request, coordinatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(task);
     }
 

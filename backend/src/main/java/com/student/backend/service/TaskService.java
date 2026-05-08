@@ -5,9 +5,7 @@ import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
 import com.student.backend.exception.ValidationException;
 import com.student.backend.model.*;
-import com.student.backend.repository.TaskRepository;
-import com.student.backend.repository.UserRepository;
-import com.student.backend.repository.ZoneRepository;
+import com.student.backend.repository.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +20,16 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final ZoneRepository zoneRepository;
+    private final ParticipationRepository participationRepository;
 
     public TaskService(TaskRepository taskRepository,
                        UserRepository userRepository,
-                       ZoneRepository zoneRepository) {
+                       ZoneRepository zoneRepository,
+                       ParticipationRepository participationRepository) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.zoneRepository = zoneRepository;
+        this.participationRepository = participationRepository;
     }
 
     @Transactional(readOnly = true)
@@ -45,16 +46,25 @@ public class TaskService {
         return toTaskResponse(task);
     }
 
-    public TaskResponse createTask(TaskCreateRequest request, String coordinatorId, String zoneId) {
+    public TaskResponse createTask(TaskCreateRequest request, String coordinatorId/*, String zoneId*/) {
         User coordinator = userRepository.findById(coordinatorId)
                 .orElseThrow(() -> new NotFoundException("Координатор не найден"));
 
 //        Zone zone = zoneRepository.findById(zoneId)
 //                .orElseThrow(() -> new NotFoundException("Зона не найдена"));
 
-        if (coordinator.getRole() != UserRole.COORDINATOR) {
-            throw new AccessDeniedException("Только координатор может создавать задачи");
+//        if (coordinator.getRole() != UserRole.COORDINATOR) {
+//            throw new AccessDeniedException("Только координатор может создавать задачи");
+//        }
+
+        Participation participation = participationRepository.findByUserIdAndEventId(coordinatorId, request.eventId())
+                .orElseThrow(() -> new AccessDeniedException("Не участвуете в мероприятии"));
+
+        if (participation.getRole() != UserRole.ORGANIZER && participation.getRole() != UserRole.COORDINATOR) {
+            throw new AccessDeniedException("Только организатор и координатор могут создавать задачи");
         }
+
+        String zoneId = request.zoneId();
 
         Zone zone = null;
         if (zoneId != null) {
@@ -86,9 +96,13 @@ public class TaskService {
             if (performers.size() != request.performers().size()) {
                 throw new NotFoundException("Один или несколько исполнителей не найдены");
             }
-            for (User performer : performers) {
-                if (performer.getRole() != UserRole.PERFORMER) {
-                    throw new ValidationException("Исполнитель должен иметь роль PERFORMER");
+            for (String performerId : request.performers()) {
+                Participation performerParticipation = participationRepository
+                        .findByUserIdAndEventId(performerId, request.eventId())
+                        .orElseThrow(() -> new ValidationException("Исполнитель не участвует в мероприятии"));
+
+                if (!UserRole.PERFORMER.equals(performerParticipation.getRole())) {
+                    throw new ValidationException("Исполнитель должен иметь роль PERFORMER в этом мероприятии");
                 }
             }
             task.setPerformers(performers);
@@ -159,8 +173,8 @@ public class TaskService {
                         user.getFullName().getName(),
                         user.getFullName().getSurname(),
                         user.getFullName().getPatronymic()
-                ),
-                user.getRole()
+                )
+//                user.getRole()
         );
     }
 }

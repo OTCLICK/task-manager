@@ -10,6 +10,7 @@ import com.student.backend.model.Event;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
 import com.student.backend.repository.EventRepository;
+import com.student.backend.repository.ParticipationRepository;
 import com.student.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,10 +24,12 @@ public class EventService {
 
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final ParticipationService participationService;
 
-    public EventService(EventRepository eventRepository, UserRepository userRepository) {
+    public EventService(EventRepository eventRepository, UserRepository userRepository, ParticipationService participationService) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
+        this.participationService = participationService;
     }
 
     @Transactional(readOnly = true)
@@ -47,9 +50,9 @@ public class EventService {
         User organizer = userRepository.findById(organizerId)
                 .orElseThrow(() -> new NotFoundException("Организатор не найден"));
 
-        if (organizer.getRole() != UserRole.ORGANIZER) {
-            throw new AccessDeniedException("Только организатор может создавать мероприятия");
-        }
+//        if (organizer.getRole() != UserRole.ORGANIZER) {
+//            throw new AccessDeniedException("Только организатор может создавать мероприятия");
+//        }
 
         int participatesCount = (request.participatesCount() != null) ? request.participatesCount() : 0;
 
@@ -64,7 +67,12 @@ public class EventService {
         );
 
         Event savedEvent = eventRepository.save(event);
+
+        participationService.createOrganizerParticipation(organizerId, savedEvent.getId());
+
         return toEventResponse(savedEvent);
+
+        //TODO: присвоить текущему пользователю participation с ролью organizer для данного мероприятия
     }
 
     public void deleteEvent(String id, String organizerId) {
@@ -99,8 +107,8 @@ public class EventService {
                         user.getFullName().getName(),
                         user.getFullName().getSurname(),
                         user.getFullName().getPatronymic()
-                ),
-                user.getRole()
+                )
+//                user.getRole()
         );
     }
 }

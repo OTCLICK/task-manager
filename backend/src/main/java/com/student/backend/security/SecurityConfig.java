@@ -28,13 +28,14 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
-                        //Временное распределение
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/api/events/**").hasRole("ORGANIZER")
-                        .requestMatchers("/api/zones/**").hasRole("COORDINATOR")
-                        .requestMatchers("/api/tasks/**").hasAnyRole("COORDINATOR", "PERFORMER")
-                        .requestMatchers("/api/users/**").hasAnyRole("ORGANIZER", "COORDINATOR")
-                        .anyRequest().authenticated()
+                                .requestMatchers("/api/auth/**").permitAll()
+                                // УБРАТЬ проверки по ролям — они теперь в сервисах!
+//                        .requestMatchers("/api/auth/**").permitAll()
+//                        .requestMatchers("/api/events/**").hasRole("ORGANIZER")
+//                        .requestMatchers("/api/zones/**").hasRole("COORDINATOR")
+//                        .requestMatchers("/api/tasks/**").hasAnyRole("COORDINATOR", "PERFORMER")
+//                        .requestMatchers("/api/users/**").hasAnyRole("ORGANIZER", "COORDINATOR")
+                                .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

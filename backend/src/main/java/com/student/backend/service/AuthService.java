@@ -40,16 +40,16 @@ public class AuthService {
                         request.fullName().name(),
                         request.fullName().surname(),
                         request.fullName().patronymic()
-                        ),
-                request.role()
+                        )
+//                request.role()
         );
 
         userRepository.save(user);
 
         String token = jwtUtils.generateToken(
                 user.getId(),
-                user.getEmail(),
-                user.getRole().name()
+                user.getEmail()
+//                user.getRole().name()
         );
 
         return new AuthResponse(token);
@@ -65,8 +65,8 @@ public class AuthService {
 
         String token = jwtUtils.generateToken(
                 user.getId(),
-                user.getEmail(),
-                user.getRole().name()
+                user.getEmail()
+//                user.getRole().name()
         );
 
         return new AuthResponse(token);

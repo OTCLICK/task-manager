@@ -7,6 +7,7 @@ import com.student.backend.service.EventService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -48,4 +49,15 @@ public class EventController {
         eventService.deleteEvent(id,  organizerId);
         return ResponseEntity.noContent().build();
     }
+
+//    @GetMapping("/{eventId}/my-role")
+//    public ResponseEntity<String> getMyRoleInEvent(
+//            @PathVariable String eventId,
+//            Authentication auth
+//    ) {
+//        String userId = ((CustomUserDetails) auth.getPrincipal()).getUserId();
+//        return participationRepository.findByUserIdAndEventId(userId, eventId)
+//                .map(p -> ResponseEntity.ok(p.getRoleName()))
+//                .orElse(ResponseEntity.notFound().build());
+//    }
 }

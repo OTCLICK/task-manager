@@ -22,6 +22,9 @@ public record TaskCreateRequest(
 
         List<String> performers,
 
-        LocalDateTime deadline
+        LocalDateTime deadline,
+
+        @NotBlank
+        String eventId
 
 ) {}

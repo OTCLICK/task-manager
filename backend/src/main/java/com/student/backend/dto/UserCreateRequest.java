@@ -15,9 +15,9 @@ public record UserCreateRequest(
         String password,
 
         @NotNull
-        FullNameDto fullName,
+        FullNameDto fullName
 
-        @NotNull
-        UserRole role
+//        @NotNull
+//        UserRole role
 ) {
 }

@@ -23,9 +23,9 @@ public class JwtUtils {
     @Value("${app.jwt.expiration}")
     private int jwtExpirationMs;
 
-    public String generateToken(String userId, String email, String role) {
+    public String generateToken(String userId, String email/*, String role*/) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("role", role);
+//        claims.put("role", role);
         claims.put("email", email);
         return generateToken(claims, userId);
     }
@@ -76,5 +76,9 @@ public class JwtUtils {
     private SecretKey getSignInKey() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
         return Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    public String getEmailFromToken(String token) {
+        return getAllClaimsFromToken(token).get("email", String.class);
     }
 }

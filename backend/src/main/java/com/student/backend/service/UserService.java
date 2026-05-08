@@ -46,12 +46,12 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    @Transactional(readOnly = true)
-    public List<UserResponse> findByRole(UserRole role) {
-        return userRepository.findByRole(role).stream()
-                .map(this::toUserResponse)
-                .collect(Collectors.toList());
-    }
+//    @Transactional(readOnly = true)
+//    public List<UserResponse> findByRole(UserRole role) {
+//        return userRepository.findByRole(role).stream()
+//                .map(this::toUserResponse)
+//                .collect(Collectors.toList());
+//    }
 
 //    public void deleteById(String id) {
 //        if (!userRepository.existsById(id)) {
@@ -68,8 +68,8 @@ public class UserService {
                         user.getFullName().getName(),
                         user.getFullName().getSurname(),
                         user.getFullName().getPatronymic()
-                ),
-                user.getRole()
+                )/*,*/
+//                user.getRole()
         );
     }
 }

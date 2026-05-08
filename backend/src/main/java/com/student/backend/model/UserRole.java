@@ -3,8 +3,7 @@ package com.student.backend.model;
 public enum UserRole {
     ORGANIZER(0),
     COORDINATOR(1),
-    PERFORMER(2),
-    ADMIN(3);
+    PERFORMER(2);
 
     private final int VALUE;
 

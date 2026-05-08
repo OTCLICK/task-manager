@@ -2,7 +2,7 @@ package com.student.backend.model;
 
 import jakarta.persistence.*;
 
-// Integer participatesCount
+// Логика вхождения в мероприятие (роли)
 @MappedSuperclass
 public abstract class BaseEntity {
     private String id;

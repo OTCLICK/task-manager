@@ -4,11 +4,9 @@ import com.student.backend.dto.*;
 import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
 import com.student.backend.exception.ValidationException;
-import com.student.backend.model.Event;
-import com.student.backend.model.User;
-import com.student.backend.model.UserRole;
-import com.student.backend.model.Zone;
+import com.student.backend.model.*;
 import com.student.backend.repository.EventRepository;
+import com.student.backend.repository.ParticipationRepository;
 import com.student.backend.repository.UserRepository;
 import com.student.backend.repository.ZoneRepository;
 import org.springframework.stereotype.Service;
@@ -24,13 +22,16 @@ public class ZoneService {
     private final ZoneRepository zoneRepository;
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
+    private final ParticipationRepository participationRepository;
 
     public ZoneService(ZoneRepository zoneRepository,
                        EventRepository eventRepository,
-                       UserRepository userRepository) {
+                       UserRepository userRepository,
+                       ParticipationRepository participationRepository) {
         this.zoneRepository = zoneRepository;
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
+        this.participationRepository = participationRepository;
     }
 
     @Transactional(readOnly = true)
@@ -47,15 +48,22 @@ public class ZoneService {
         return toZoneResponse(zone);
     }
 
-    public ZoneResponse createZone(ZoneCreateRequest request, String eventId, String coordinatorId) {
-        Event event = eventRepository.findById(eventId)
+    public ZoneResponse createZone(ZoneCreateRequest request, String coordinatorId) {
+        Event event = eventRepository.findById(request.eventId())
                 .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
 
         User coordinator = userRepository.findById(coordinatorId)
                 .orElseThrow(() -> new NotFoundException("Координатор не найден"));
 
-        if (coordinator.getRole() != UserRole.COORDINATOR) {
-            throw new ValidationException("Пользователь должен быть координатором");
+//        if (coordinator.getRole() != UserRole.COORDINATOR) {
+//            throw new ValidationException("Пользователь должен быть координатором");
+//        }
+
+        Participation participation = participationRepository.findByUserIdAndEventId(coordinatorId, request.eventId())
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в мероприятии"));
+
+        if (participation.getRole() != UserRole.ORGANIZER && participation.getRole() != UserRole.COORDINATOR) {
+            throw new AccessDeniedException("Только организатор и координатор могут создавать зоны");
         }
 
         int participatesCount = (request.participatesCount() != null) ? request.participatesCount() : 0;
@@ -116,8 +124,8 @@ public class ZoneService {
                         user.getFullName().getName(),
                         user.getFullName().getSurname(),
                         user.getFullName().getPatronymic()
-                ),
-                user.getRole()
+                )
+//                user.getRole()
         );
     }
 }
