@@ -68,7 +68,7 @@ interface ApiService {
     @GET("users/search")
     suspend fun searchUsers(@Query("q") query: String): Response<List<User>>
 
-    @GET("users/role/{role}")
-    suspend fun getUsersByRole(@Path("role") role: String): Response<List<User>>
+//    @GET("users/role/{role}")
+//    suspend fun getUsersByRole(@Path("role") role: String): Response<List<User>>
 
 }

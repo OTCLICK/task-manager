@@ -14,9 +14,9 @@ class LoginUseCase(private val authRepository: AuthRepository) {
         email: String,
         password: String,
         fullName: FullName,
-        role: String
-    ): Resource<com.example.mobile.data.model.AuthResponse> {
-        return authRepository.register(email, password, fullName, role)
+//        role: String
+    ): Resource<AuthResponse> {
+        return authRepository.register(email, password, fullName/*, role*/)
     }
 
     suspend fun logout() {

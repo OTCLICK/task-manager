@@ -31,14 +31,14 @@ class AuthRepository(
         email: String,
         password: String,
         fullName: FullName,
-        role: String
+//        role: String
     ): Resource<AuthResponse> {
         return try {
             val request = UserCreateRequest(
                 email = email,
                 password = password,
-                fullName = fullName,
-                role = role
+                fullName = fullName
+//                role = role
             )
             val response = apiService.register(request)
 

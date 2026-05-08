@@ -27,7 +27,7 @@ fun RegisterScreen(
     var name by remember { mutableStateOf("") }
     var surname by remember { mutableStateOf("") }
     var patronymic by remember { mutableStateOf("") }
-    var selectedRole by remember { mutableStateOf("ORGANIZER") }
+//    var selectedRole by remember { mutableStateOf("ORGANIZER") }
     var showErrorDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
@@ -73,12 +73,12 @@ fun RegisterScreen(
         onSurnameChange = { surname = it },
         patronymic = patronymic,
         onPatronymicChange = { patronymic = it },
-        selectedRole = selectedRole,
-        onRoleChange = { selectedRole = it },
+//        selectedRole = selectedRole,
+//        onRoleChange = { selectedRole = it },
         isLoading = isLoading,
         onRegisterClick = {
             val fullName = FullName(name = name, surname = surname, patronymic = patronymic)
-            viewModel.register(email, password, fullName, selectedRole)
+            viewModel.register(email, password, fullName/*, selectedRole*/)
         },
         onNavigateToLogin = onNavigateToLogin
     )
@@ -96,8 +96,8 @@ private fun RegisterContent(
     onSurnameChange: (String) -> Unit,
     patronymic: String,
     onPatronymicChange: (String) -> Unit,
-    selectedRole: String,
-    onRoleChange: (String) -> Unit,
+//    selectedRole: String,
+//    onRoleChange: (String) -> Unit,
     isLoading: Boolean,
     onRegisterClick: () -> Unit,
     onNavigateToLogin: () -> Unit
@@ -160,17 +160,17 @@ private fun RegisterContent(
                 .padding(top = 8.dp)
         )
 
-        Text(text = "Роль:", style = MaterialTheme.typography.bodyMedium)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            RoleButton("ORGANIZER", selectedRole, onRoleChange)
-            RoleButton("COORDINATOR", selectedRole, onRoleChange)
-            RoleButton("PERFORMER", selectedRole, onRoleChange)
-        }
+//        Text(text = "Роль:", style = MaterialTheme.typography.bodyMedium)
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(top = 8.dp),
+//            horizontalArrangement = Arrangement.SpaceEvenly
+//        ) {
+//            RoleButton("ORGANIZER", selectedRole, onRoleChange)
+//            RoleButton("COORDINATOR", selectedRole, onRoleChange)
+//            RoleButton("PERFORMER", selectedRole, onRoleChange)
+//        }
 
         Button(
             onClick = onRegisterClick,
@@ -203,26 +203,26 @@ private fun RegisterContent(
     }
 }
 
-@Composable
-private fun RoleButton(
-    role: String,
-    selectedRole: String,
-    onRoleSelect: (String) -> Unit
-) {
-    OutlinedButton(
-        onClick = { onRoleSelect(role) },
-        colors = if (role == selectedRole) {
-            ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-        } else {
-            ButtonDefaults.outlinedButtonColors()
-        },
-        modifier = Modifier
-            .width(100.dp)
-    ) {
-        Text(
-            text = role.lowercase().replaceFirstChar { it.uppercase() },
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-}
+//@Composable
+//private fun RoleButton(
+//    role: String,
+//    selectedRole: String,
+//    onRoleSelect: (String) -> Unit
+//) {
+//    OutlinedButton(
+//        onClick = { onRoleSelect(role) },
+//        colors = if (role == selectedRole) {
+//            ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+//        } else {
+//            ButtonDefaults.outlinedButtonColors()
+//        },
+//        modifier = Modifier
+//            .width(100.dp)
+//    ) {
+//        Text(
+//            text = role.lowercase().replaceFirstChar { it.uppercase() },
+//            maxLines = 1,
+//            softWrap = false
+//        )
+//    }
+//}

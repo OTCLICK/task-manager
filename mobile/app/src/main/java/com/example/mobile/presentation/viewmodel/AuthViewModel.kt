@@ -38,13 +38,13 @@ class AuthViewModel(
         email: String,
         password: String,
         fullName: FullName,
-        role: String
+//        role: String
     ) {
         viewModelScope.launch {
             _isLoading.value = true
             _registerState.value = Resource.Loading
 
-            val result = loginUseCase.register(email, password, fullName, role)
+            val result = loginUseCase.register(email, password, fullName/*, role*/)
             _registerState.value = result
             _isLoading.value = false
         }
