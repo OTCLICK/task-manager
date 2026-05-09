@@ -2,6 +2,7 @@ package com.student.backend.service;
 
 import com.student.backend.dto.ParticipantResponse;
 import com.student.backend.dto.InvitationResponse;
+import com.student.backend.dto.SentInvitationResponse;
 import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
 import com.student.backend.exception.ValidationException;
@@ -163,6 +164,40 @@ public class ParticipationService {
                         i.getEvent().getName(),
                         i.getInvitedBy().getId(),
                         i.getInvitedBy().getEmail(),
+                        i.getRole(),
+                        i.getStatus(),
+                        i.getCreatedAt()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<InvitationResponse> getIncomingPendingInvitationsForUser(String invitedUserId) {
+        return invitationRepository.findByInvitedUserIdAndStatus(invitedUserId, InvitationStatus.PENDING)
+                .stream()
+                .map(i -> new InvitationResponse(
+                        i.getId(),
+                        i.getEvent().getId(),
+                        i.getEvent().getName(),
+                        i.getInvitedBy().getId(),
+                        i.getInvitedBy().getEmail(),
+                        i.getRole(),
+                        i.getStatus(),
+                        i.getCreatedAt()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<SentInvitationResponse> getSentInvitationsForUser(String invitedByUserId) {
+        return invitationRepository.findByInvitedByIdOrderByCreatedAtDesc(invitedByUserId)
+                .stream()
+                .map(i -> new SentInvitationResponse(
+                        i.getId(),
+                        i.getEvent().getId(),
+                        i.getEvent().getName(),
+                        i.getInvitedUser().getId(),
+                        i.getInvitedUser().getEmail(),
                         i.getRole(),
                         i.getStatus(),
                         i.getCreatedAt()

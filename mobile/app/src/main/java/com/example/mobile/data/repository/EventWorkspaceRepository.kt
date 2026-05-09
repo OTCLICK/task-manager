@@ -1,9 +1,14 @@
 package com.example.mobile.data.repository
 
 import com.example.mobile.data.api.ApiClient
+import com.example.mobile.data.local.CachedWorkspaceEntity
+import com.example.mobile.data.local.WorkspaceCacheDao
+import com.example.mobile.data.local.WorkspaceCacheJson
 import com.example.mobile.data.model.EventApiModel
+import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
+import com.example.mobile.data.model.TaskStatusPatchRequest
 import com.example.mobile.data.model.Zone
 import com.example.mobile.data.model.ZoneCreateRequest
 import com.example.mobile.utils.TokenManager
@@ -11,7 +16,8 @@ import com.example.mobile.utils.toUserFacingHttpError
 import kotlinx.coroutines.flow.firstOrNull
 
 class EventWorkspaceRepository(
-    private val tokenManager: TokenManager
+    private val tokenManager: TokenManager,
+    private val workspaceCacheDao: WorkspaceCacheDao
 ) {
 
     private suspend fun authorizedApi() = ApiClient.createAuthorizedApiService(
@@ -19,43 +25,126 @@ class EventWorkspaceRepository(
             ?: throw IllegalStateException("Не найден токен авторизации")
     )
 
+    private suspend fun patchRow(
+        eventId: String,
+        block: (CachedWorkspaceEntity) -> CachedWorkspaceEntity
+    ) {
+        val prev = workspaceCacheDao.getByEventId(eventId)
+        val base = prev ?: CachedWorkspaceEntity(
+            eventId = eventId,
+            eventJson = null,
+            zonesJson = null,
+            tasksJson = null,
+            participantsJson = null,
+            cachedAtMillis = 0L
+        )
+        workspaceCacheDao.upsert(block(base).copy(cachedAtMillis = System.currentTimeMillis()))
+    }
+
+    private suspend fun persistEvent(eventId: String, event: EventApiModel) {
+        patchRow(eventId) { it.copy(eventJson = WorkspaceCacheJson.eventToJson(event)) }
+    }
+
+    private suspend fun persistZones(eventId: String, zones: List<Zone>) {
+        patchRow(eventId) { it.copy(zonesJson = WorkspaceCacheJson.zonesToJson(zones)) }
+    }
+
+    private suspend fun persistTasks(eventId: String, tasks: List<Task>) {
+        patchRow(eventId) { it.copy(tasksJson = WorkspaceCacheJson.tasksToJson(tasks)) }
+    }
+
+    private suspend fun persistParticipants(eventId: String, participants: List<ParticipantApiModel>) {
+        patchRow(eventId) {
+            it.copy(participantsJson = WorkspaceCacheJson.participantsToJson(participants))
+        }
+    }
+
     suspend fun loadEvent(eventId: String): Result<EventApiModel> {
         return try {
             val response = authorizedApi().getEventById(eventId)
-            if (!response.isSuccessful || response.body() == null) {
-                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                persistEvent(eventId, body)
+                Result.success(body)
             } else {
-                Result.success(response.body()!!)
+                loadEventFromCache(eventId)
+                    ?: Result.failure(IllegalStateException(response.toUserFacingHttpError()))
             }
         } catch (e: Throwable) {
-            Result.failure(e)
+            loadEventFromCache(eventId) ?: Result.failure(e)
         }
+    }
+
+    private suspend fun loadEventFromCache(eventId: String): Result<EventApiModel>? {
+        val json = workspaceCacheDao.getByEventId(eventId)?.eventJson ?: return null
+        val parsed = WorkspaceCacheJson.eventFromJson(json) ?: return null
+        return Result.success(parsed)
     }
 
     suspend fun loadZones(eventId: String): Result<List<Zone>> {
         return try {
             val response = authorizedApi().getZones(eventId)
-            if (!response.isSuccessful || response.body() == null) {
-                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                persistZones(eventId, body)
+                Result.success(body)
             } else {
-                Result.success(response.body()!!)
+                loadZonesFromCache(eventId)
+                    ?: Result.failure(IllegalStateException(response.toUserFacingHttpError()))
             }
         } catch (e: Throwable) {
-            Result.failure(e)
+            loadZonesFromCache(eventId) ?: Result.failure(e)
         }
+    }
+
+    private suspend fun loadZonesFromCache(eventId: String): Result<List<Zone>>? {
+        val json = workspaceCacheDao.getByEventId(eventId)?.zonesJson ?: return null
+        val parsed = WorkspaceCacheJson.zonesFromJson(json) ?: return null
+        return Result.success(parsed)
     }
 
     suspend fun loadTasks(eventId: String): Result<List<Task>> {
         return try {
             val response = authorizedApi().getTasks(eventId)
-            if (!response.isSuccessful || response.body() == null) {
-                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                persistTasks(eventId, body)
+                Result.success(body)
             } else {
-                Result.success(response.body()!!)
+                loadTasksFromCache(eventId)
+                    ?: Result.failure(IllegalStateException(response.toUserFacingHttpError()))
             }
         } catch (e: Throwable) {
-            Result.failure(e)
+            loadTasksFromCache(eventId) ?: Result.failure(e)
         }
+    }
+
+    private suspend fun loadTasksFromCache(eventId: String): Result<List<Task>>? {
+        val json = workspaceCacheDao.getByEventId(eventId)?.tasksJson ?: return null
+        val parsed = WorkspaceCacheJson.tasksFromJson(json) ?: return null
+        return Result.success(parsed)
+    }
+
+    suspend fun loadParticipants(eventId: String): Result<List<ParticipantApiModel>> {
+        return try {
+            val response = authorizedApi().getParticipants(eventId)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                persistParticipants(eventId, body)
+                Result.success(body)
+            } else {
+                loadParticipantsFromCache(eventId)
+                    ?: Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            loadParticipantsFromCache(eventId) ?: Result.failure(e)
+        }
+    }
+
+    private suspend fun loadParticipantsFromCache(eventId: String): Result<List<ParticipantApiModel>>? {
+        val json = workspaceCacheDao.getByEventId(eventId)?.participantsJson ?: return null
+        val parsed = WorkspaceCacheJson.participantsFromJson(json) ?: return null
+        return Result.success(parsed)
     }
 
     suspend fun createZone(request: ZoneCreateRequest): Result<Unit> {
@@ -81,6 +170,19 @@ class EventWorkspaceRepository(
     suspend fun deleteTask(taskId: String): Result<Unit> {
         return try {
             val response = authorizedApi().deleteTask(taskId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateTaskStatus(taskId: String, taskStatus: String): Result<Unit> {
+        return try {
+            val response = authorizedApi().updateTaskStatus(
+                taskId,
+                TaskStatusPatchRequest(taskStatus = taskStatus)
+            )
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
         } catch (e: Throwable) {

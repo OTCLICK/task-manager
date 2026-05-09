@@ -13,7 +13,9 @@ object DatabaseProvider {
                 context.applicationContext,
                 AppDatabase::class.java,
                 "task_manager.db"
-            ).build().also { instance = it }
+            )
+                .fallbackToDestructiveMigration()
+                .build().also { instance = it }
         }
     }
 }

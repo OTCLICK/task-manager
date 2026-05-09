@@ -3,6 +3,7 @@ package com.example.mobile.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobile.data.model.EventApiModel
+import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
 import com.example.mobile.data.model.Zone
@@ -18,6 +19,7 @@ data class EventDetailUiState(
     val event: EventApiModel? = null,
     val zones: List<Zone> = emptyList(),
     val tasks: List<Task> = emptyList(),
+    val participants: List<ParticipantApiModel> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val formError: String? = null
@@ -50,9 +52,14 @@ class EventDetailViewModel(
             }
             val zonesResult = repository.loadZones(eventId)
             val tasksResult = repository.loadTasks(eventId)
+            val participantsResult = repository.loadParticipants(eventId)
             val sideErr = buildString {
                 zonesResult.exceptionOrNull()?.message?.let { append(it) }
                 tasksResult.exceptionOrNull()?.message?.let {
+                    if (isNotEmpty()) append("\n")
+                    append(it)
+                }
+                participantsResult.exceptionOrNull()?.message?.let {
                     if (isNotEmpty()) append("\n")
                     append(it)
                 }
@@ -64,6 +71,7 @@ class EventDetailViewModel(
                     event = eventResult.getOrNull(),
                     zones = zonesResult.getOrElse { emptyList() },
                     tasks = tasksResult.getOrElse { emptyList() },
+                    participants = participantsResult.getOrElse { emptyList() },
                     errorMessage = sideErr
                 )
             }
@@ -106,6 +114,7 @@ class EventDetailViewModel(
         zoneId: String?,
         priority: String?,
         deadline: String?,
+        performerIds: List<String>?,
         onResult: (Boolean) -> Unit
     ) {
         viewModelScope.launch {
@@ -116,7 +125,7 @@ class EventDetailViewModel(
                     description = description,
                     taskPriority = priority ?: "MEDIUM",
                     zoneId = zoneId,
-                    performers = null,
+                    performers = performerIds?.takeIf { it.isNotEmpty() },
                     deadline = deadline?.takeIf { it.isNotBlank() },
                     eventId = eventId
                 )
@@ -135,6 +144,15 @@ class EventDetailViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(formError = null) }
             val result = repository.deleteTask(taskId)
+            if (result.isSuccess) refresh()
+            else _uiState.update { it.copy(formError = result.exceptionOrNull()?.message) }
+        }
+    }
+
+    fun updateTaskStatus(taskId: String, newStatus: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(formError = null) }
+            val result = repository.updateTaskStatus(taskId, newStatus)
             if (result.isSuccess) refresh()
             else _uiState.update { it.copy(formError = result.exceptionOrNull()?.message) }
         }

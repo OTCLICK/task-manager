@@ -2,12 +2,68 @@ package com.example.mobile.data.repository
 
 import com.example.mobile.data.api.ApiClient
 import com.example.mobile.presentation.model.InvitationListItem
+import com.example.mobile.presentation.model.SentInvitationListItem
 import com.example.mobile.utils.TokenManager
+import com.example.mobile.utils.toUserFacingHttpError
 import kotlinx.coroutines.flow.firstOrNull
 
 class InvitationRepository(
     private val tokenManager: TokenManager
 ) {
+    suspend fun getIncomingPendingGlobal(): Result<List<InvitationListItem>> {
+        val token = tokenManager.tokenFlow.firstOrNull()
+            ?: return Result.failure(IllegalStateException("Не найден токен авторизации"))
+
+        return try {
+            val api = ApiClient.createAuthorizedApiService(token)
+            val response = api.getIncomingInvitations()
+            if (!response.isSuccessful || response.body() == null) {
+                return Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+            Result.success(
+                response.body()!!.map {
+                    InvitationListItem(
+                        invitationId = it.invitationId,
+                        eventId = it.eventId,
+                        eventName = it.eventName,
+                        invitedByEmail = it.invitedByEmail,
+                        role = it.role,
+                        status = it.status
+                    )
+                }
+            )
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getSentInvitations(): Result<List<SentInvitationListItem>> {
+        val token = tokenManager.tokenFlow.firstOrNull()
+            ?: return Result.failure(IllegalStateException("Не найден токен авторизации"))
+
+        return try {
+            val api = ApiClient.createAuthorizedApiService(token)
+            val response = api.getSentInvitations()
+            if (!response.isSuccessful || response.body() == null) {
+                return Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+            Result.success(
+                response.body()!!.map {
+                    SentInvitationListItem(
+                        invitationId = it.invitationId,
+                        eventId = it.eventId,
+                        eventName = it.eventName,
+                        invitedUserEmail = it.invitedUserEmail,
+                        role = it.role,
+                        status = it.status
+                    )
+                }
+            )
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getMyInvitationsByEvent(eventId: String): Result<List<InvitationListItem>> {
         val token = tokenManager.tokenFlow.firstOrNull()
             ?: return Result.failure(IllegalStateException("Не найден токен авторизации"))
@@ -16,9 +72,7 @@ class InvitationRepository(
             val api = ApiClient.createAuthorizedApiService(token)
             val response = api.getMyInvitationsByEvent(eventId)
             if (!response.isSuccessful || response.body() == null) {
-                return Result.failure(
-                    IllegalStateException("Не удалось загрузить приглашения: ${response.message()}")
-                )
+                return Result.failure(IllegalStateException(response.toUserFacingHttpError()))
             }
 
             Result.success(
@@ -46,7 +100,7 @@ class InvitationRepository(
             val api = ApiClient.createAuthorizedApiService(token)
             val response = api.acceptInvitation(eventId, invitationId)
             if (response.isSuccessful) Result.success(Unit)
-            else Result.failure(IllegalStateException("Не удалось принять приглашение: ${response.message()}"))
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
         } catch (e: Throwable) {
             Result.failure(e)
         }
@@ -60,7 +114,7 @@ class InvitationRepository(
             val api = ApiClient.createAuthorizedApiService(token)
             val response = api.declineInvitation(eventId, invitationId)
             if (response.isSuccessful) Result.success(Unit)
-            else Result.failure(IllegalStateException("Не удалось отклонить приглашение: ${response.message()}"))
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
         } catch (e: Throwable) {
             Result.failure(e)
         }

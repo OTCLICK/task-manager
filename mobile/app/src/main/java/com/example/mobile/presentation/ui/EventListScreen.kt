@@ -36,7 +36,7 @@ import com.example.mobile.presentation.viewmodel.EventListViewModel
 fun EventListScreen(
     viewModel: EventListViewModel,
     onOpenEvent: (String) -> Unit,
-    onOpenInvitations: (String) -> Unit,
+    onOpenInvitationsHub: () -> Unit,
     onLogout: () -> Unit,
     onCreateEvent: () -> Unit
 ) {
@@ -53,6 +53,9 @@ fun EventListScreen(
             TopAppBar(
                 title = { Text("Мероприятия") },
                 actions = {
+                    TextButton(onClick = onOpenInvitationsHub) {
+                        Text("Приглашения")
+                    }
                     TextButton(onClick = { viewModel.refresh() }) {
                         Text("Обновить")
                     }
@@ -136,12 +139,6 @@ fun EventListScreen(
                                     "Участников: ${event.participantsCount}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                Button(
-                                    onClick = { onOpenInvitations(event.id) },
-                                    modifier = Modifier.padding(top = 8.dp)
-                                ) {
-                                    Text("Мои приглашения")
-                                }
                             }
                         }
                     }

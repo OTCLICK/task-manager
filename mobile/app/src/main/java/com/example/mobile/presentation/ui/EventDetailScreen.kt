@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -37,8 +38,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.mobile.data.model.ParticipantApiModel
+import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.Zone
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
+
+private const val ROLE_PERFORMER = "PERFORMER"
+
+private val TASK_STATUS_OPTIONS = listOf(
+    "CREATED",
+    "IN_PROGRESS",
+    "HELP_REQUESTED",
+    "COMPLETED",
+    "CANCELLED"
+)
+
+private fun taskStatusRu(status: String): String = when (status) {
+    "CREATED" -> "Создана"
+    "IN_PROGRESS" -> "В работе"
+    "HELP_REQUESTED" -> "Нужна помощь"
+    "COMPLETED" -> "Выполнена"
+    "CANCELLED" -> "Отменена"
+    else -> status
+}
 
 private fun normalizeLocalDateTimeInput(raw: String): String {
     val t = raw.trim()
@@ -75,12 +97,13 @@ fun EventDetailScreen(
     if (showTaskDialog) {
         CreateTaskDialog(
             zones = state.zones,
+            participants = state.participants,
             onDismiss = {
                 showTaskDialog = false
                 viewModel.clearError()
             },
-            onConfirm = { title, desc, zoneId, priority, deadline ->
-                viewModel.createTask(title, desc, zoneId, priority, deadline) { ok ->
+            onConfirm = { title, desc, zoneId, priority, deadline, performerIds ->
+                viewModel.createTask(title, desc, zoneId, priority, deadline, performerIds) { ok ->
                     if (ok) showTaskDialog = false
                 }
             },
@@ -227,27 +250,81 @@ fun EventDetailScreen(
                 }
             } else {
                 items(state.tasks, key = { it.id }) { task ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(task.title, style = MaterialTheme.typography.titleSmall)
-                            task.description?.takeIf { it.isNotBlank() }?.let {
-                                Text(it, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Text(
-                                "Статус: ${task.status} · Приоритет: ${task.priority}",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                            Text(
-                                text = task.zone?.let { z -> "Зона: ${z.name}" } ?: "Зона: не указана",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            TextButton(onClick = { taskToDelete = task.id }) {
-                                Text("Удалить", color = MaterialTheme.colorScheme.error)
-                            }
+                    TaskCardWithStatus(
+                        task = task,
+                        onStatusChange = { newStatus ->
+                            viewModel.updateTaskStatus(task.id, newStatus)
+                        },
+                        onDelete = { taskToDelete = task.id }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskCardWithStatus(
+    task: Task,
+    onStatusChange: (String) -> Unit,
+    onDelete: () -> Unit
+) {
+    var statusMenuOpen by remember { mutableStateOf(false) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text(task.title, style = MaterialTheme.typography.titleSmall)
+            task.description?.takeIf { it.isNotBlank() }?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(
+                "Приоритет: ${task.priority}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = taskStatusRu(task.status),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Статус") },
+                    trailingIcon = {
+                        IconButton(onClick = { statusMenuOpen = !statusMenuOpen }) {
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать статус")
                         }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { statusMenuOpen = true }
+                )
+                DropdownMenu(
+                    expanded = statusMenuOpen,
+                    onDismissRequest = { statusMenuOpen = false }
+                ) {
+                    TASK_STATUS_OPTIONS.forEach { s ->
+                        DropdownMenuItem(
+                            text = { Text(taskStatusRu(s)) },
+                            onClick = {
+                                statusMenuOpen = false
+                                if (s != task.status) onStatusChange(s)
+                            }
+                        )
                     }
                 }
+            }
+            Text(
+                text = task.zone?.let { z -> "Зона: ${z.name}" } ?: "Зона: не указана",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            if (task.performers.isNotEmpty()) {
+                Text(
+                    text = "Исполнители: " + task.performers.joinToString { it.email },
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            TextButton(onClick = onDelete) {
+                Text("Удалить", color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -313,8 +390,9 @@ private fun CreateZoneDialog(
 @Composable
 private fun CreateTaskDialog(
     zones: List<Zone>,
+    participants: List<ParticipantApiModel>,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, description: String?, zoneId: String?, priority: String?, deadline: String?) -> Unit,
+    onConfirm: (title: String, description: String?, zoneId: String?, priority: String?, deadline: String?, performerIds: List<String>?) -> Unit,
     errorText: String?
 ) {
     var title by remember { mutableStateOf("") }
@@ -323,6 +401,11 @@ private fun CreateTaskDialog(
     var priority by remember { mutableStateOf("MEDIUM") }
     var expanded by remember { mutableStateOf(false) }
     var selectedZone by remember { mutableStateOf<Zone?>(null) }
+    var selectedPerformerIds by remember { mutableStateOf(setOf<String>()) }
+
+    val performerCandidates = remember(participants) {
+        participants.filter { it.role == ROLE_PERFORMER }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -390,6 +473,41 @@ private fun CreateTaskDialog(
                     label = { Text("Дедлайн (ГГГГ-ММ-ДДTЧЧ:ММ)") },
                     modifier = Modifier.fillMaxWidth()
                 )
+                Text(
+                    "Исполнители (роль PERFORMER)",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                if (performerCandidates.isEmpty()) {
+                    Text(
+                        "В мероприятии нет участников с ролью исполнителя — назначить никого нельзя (по правилам сервера).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    performerCandidates.forEach { p ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = selectedPerformerIds.contains(p.userId),
+                                onCheckedChange = { checked ->
+                                    selectedPerformerIds = if (checked) {
+                                        selectedPerformerIds + p.userId
+                                    } else {
+                                        selectedPerformerIds - p.userId
+                                    }
+                                }
+                            )
+                            Text(
+                                text = p.email,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                        }
+                    }
+                }
                 errorText?.let {
                     Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
@@ -399,12 +517,14 @@ private fun CreateTaskDialog(
             TextButton(
                 onClick = {
                     if (title.isNotBlank()) {
+                        val ids = selectedPerformerIds.toList().takeIf { it.isNotEmpty() }
                         onConfirm(
                             title.trim(),
                             description.trim().takeIf { it.isNotEmpty() },
                             selectedZone?.id,
                             priority.takeIf { it.isNotBlank() },
-                            normalizeLocalDateTimeInput(deadline).takeIf { it.isNotBlank() }
+                            normalizeLocalDateTimeInput(deadline).takeIf { it.isNotBlank() },
+                            ids
                         )
                     }
                 }

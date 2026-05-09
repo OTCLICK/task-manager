@@ -129,6 +129,51 @@ public class TaskService {
         return toTaskResponse(savedTask);
     }
 
+    public TaskResponse updateTaskStatus(String taskId, TaskStatus newStatus, String userId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Задача не найдена"));
+        assertCanChangeTaskStatus(task, userId);
+        task.setStatus(newStatus);
+        task.setUpdatedAt(LocalDateTime.now());
+        if (newStatus == TaskStatus.COMPLETED) {
+            task.setCompletedAt(LocalDateTime.now());
+        } else {
+            task.setCompletedAt(null);
+        }
+        Task saved = taskRepository.save(task);
+        return toTaskResponse(saved);
+    }
+
+    private void assertCanChangeTaskStatus(Task task, String userId) {
+        if (task.getCoordinator().getId().equals(userId)) {
+            return;
+        }
+        String eventId = resolveEventId(task);
+        Participation participation = participationRepository.findByUserIdAndEventId(userId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+        if (participation.getRole() == UserRole.ORGANIZER || participation.getRole() == UserRole.COORDINATOR) {
+            return;
+        }
+        if (participation.getRole() == UserRole.PERFORMER) {
+            boolean assigned = task.getPerformers() != null
+                    && task.getPerformers().stream().anyMatch(u -> u.getId().equals(userId));
+            if (assigned) {
+                return;
+            }
+        }
+        throw new AccessDeniedException("Недостаточно прав для смены статуса задачи");
+    }
+
+    private String resolveEventId(Task task) {
+        if (task.getEvent() != null) {
+            return task.getEvent().getId();
+        }
+        if (task.getZone() != null && task.getZone().getEvent() != null) {
+            return task.getZone().getEvent().getId();
+        }
+        throw new ValidationException("У задачи не задано мероприятие");
+    }
+
     public void deleteTask(String id, String coordinatorId) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Задача не найдена"));

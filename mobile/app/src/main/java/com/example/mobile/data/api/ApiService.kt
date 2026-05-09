@@ -6,8 +6,11 @@ import com.example.mobile.data.model.Event
 import com.example.mobile.data.model.EventApiModel
 import com.example.mobile.data.model.EventCreateRequest
 import com.example.mobile.data.model.InvitationApiModel
+import com.example.mobile.data.model.SentInvitationApiModel
+import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
+import com.example.mobile.data.model.TaskStatusPatchRequest
 import com.example.mobile.data.model.User
 import com.example.mobile.data.model.UserCreateRequest
 import com.example.mobile.data.model.Zone
@@ -16,6 +19,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -33,6 +37,15 @@ interface ApiService {
 
     @GET("events/{id}")
     suspend fun getEventById(@Path("id") id: String): Response<EventApiModel>
+
+    @GET("events/{eventId}/participants")
+    suspend fun getParticipants(@Path("eventId") eventId: String): Response<List<ParticipantApiModel>>
+
+    @GET("invitations/incoming")
+    suspend fun getIncomingInvitations(): Response<List<InvitationApiModel>>
+
+    @GET("invitations/sent")
+    suspend fun getSentInvitations(): Response<List<SentInvitationApiModel>>
 
     @GET("events/{eventId}/participants/invitations/my")
     suspend fun getMyInvitationsByEvent(@Path("eventId") eventId: String): Response<List<InvitationApiModel>>
@@ -75,6 +88,12 @@ interface ApiService {
 
     @POST("tasks")
     suspend fun createTask(@Body request: TaskCreateRequest): Response<Task>
+
+    @PATCH("tasks/{id}/status")
+    suspend fun updateTaskStatus(
+        @Path("id") id: String,
+        @Body request: TaskStatusPatchRequest
+    ): Response<Task>
 
     @DELETE("tasks/{id}")
     suspend fun deleteTask(@Path("id") id: String): Response<Unit>

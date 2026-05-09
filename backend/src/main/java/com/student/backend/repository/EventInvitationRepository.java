@@ -9,6 +9,10 @@ import java.util.Optional;
 
 public interface EventInvitationRepository extends JpaRepository<EventInvitation, String> {
     List<EventInvitation> findByInvitedUserIdAndStatus(String invitedUserId, InvitationStatus status);
+
+    List<EventInvitation> findByInvitedByIdOrderByCreatedAtDesc(String invitedByUserId);
+
     List<EventInvitation> findByEventIdAndInvitedUserIdAndStatus(String eventId, String invitedUserId, InvitationStatus status);
+
     Optional<EventInvitation> findFirstByEventIdAndInvitedUserIdAndStatus(String eventId, String invitedUserId, InvitationStatus status);
 }

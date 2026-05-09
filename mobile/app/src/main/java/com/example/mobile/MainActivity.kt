@@ -21,14 +21,14 @@ import com.example.mobile.domain.CreateEventUseCase
 import com.example.mobile.presentation.ui.CreateEventScreen
 import com.example.mobile.presentation.ui.EventDetailScreen
 import com.example.mobile.presentation.ui.EventListScreen
-import com.example.mobile.presentation.ui.InvitationScreen
+import com.example.mobile.presentation.ui.InvitationsHubScreen
 import com.example.mobile.presentation.ui.LoginScreen
 import com.example.mobile.presentation.ui.RegisterScreen
 import com.example.mobile.presentation.ui.theme.MobileTheme
 import com.example.mobile.presentation.viewmodel.EventListViewModel
 import com.example.mobile.presentation.viewmodel.EventListViewModelFactory
-import com.example.mobile.presentation.viewmodel.InvitationViewModel
-import com.example.mobile.presentation.viewmodel.InvitationViewModelFactory
+import com.example.mobile.presentation.viewmodel.InvitationsHubViewModel
+import com.example.mobile.presentation.viewmodel.InvitationsHubViewModelFactory
 import com.example.mobile.presentation.viewmodel.AuthViewModelFactory
 import com.example.mobile.presentation.viewmodel.CreateEventViewModel
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
@@ -49,11 +49,12 @@ class MainActivity : ComponentActivity() {
         val eventListViewModelFactory = EventListViewModelFactory(eventRepository)
         val eventListViewModel = ViewModelProvider(this, eventListViewModelFactory)[EventListViewModel::class.java]
         val invitationRepository = InvitationRepository(tokenManager)
-        val invitationViewModelFactory = InvitationViewModelFactory(invitationRepository)
-        val invitationViewModel = ViewModelProvider(this, invitationViewModelFactory)[InvitationViewModel::class.java]
         val createEventUseCase = CreateEventUseCase(eventRepository)
         val createEventViewModel = CreateEventViewModel(createEventUseCase)
-        val eventWorkspaceRepository = EventWorkspaceRepository(tokenManager)
+        val eventWorkspaceRepository = EventWorkspaceRepository(
+            tokenManager,
+            DatabaseProvider.getDatabase(this).workspaceCacheDao()
+        )
 
         setContent {
             MobileTheme {
@@ -94,8 +95,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenEvent = { eventId ->
                                     navController.navigate("event/$eventId")
                                 },
-                                onOpenInvitations = { eventId ->
-                                    navController.navigate("invitations/$eventId")
+                                onOpenInvitationsHub = {
+                                    navController.navigate("invitations-hub")
                                 },
                                 onLogout = {
                                     viewModel.logout()
@@ -123,12 +124,18 @@ class MainActivity : ComponentActivity() {
                                 onBack = { navController.popBackStack() }
                             )
                         }
-                        composable("invitations/{eventId}") { backStackEntry ->
-                            val eventId = backStackEntry.arguments?.getString("eventId").orEmpty()
-                            InvitationScreen(
-                                eventId = eventId,
-                                viewModel = invitationViewModel,
-                                onBack = { navController.popBackStack() }
+                        composable("invitations-hub") { backStackEntry ->
+                            val hubFactory = InvitationsHubViewModelFactory(invitationRepository)
+                            val hubViewModel = ViewModelProvider(
+                                backStackEntry,
+                                hubFactory
+                            )[InvitationsHubViewModel::class.java]
+                            InvitationsHubScreen(
+                                viewModel = hubViewModel,
+                                onBack = { navController.popBackStack() },
+                                onOpenEvent = { eventId ->
+                                    navController.navigate("event/$eventId")
+                                }
                             )
                         }
 

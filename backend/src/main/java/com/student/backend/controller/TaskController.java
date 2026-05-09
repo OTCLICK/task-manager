@@ -2,6 +2,7 @@ package com.student.backend.controller;
 
 import com.student.backend.dto.TaskCreateRequest;
 import com.student.backend.dto.TaskResponse;
+import com.student.backend.dto.TaskStatusPatchRequest;
 import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.TaskService;
 import jakarta.validation.Valid;
@@ -46,6 +47,16 @@ public class TaskController {
         String coordinatorId = securityUtils.getCurrentUserId();
         TaskResponse task = taskService.createTask(request, coordinatorId);
         return ResponseEntity.status(HttpStatus.CREATED).body(task);
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<TaskResponse> updateTaskStatus(
+            @PathVariable String id,
+            @Valid @RequestBody TaskStatusPatchRequest request
+    ) {
+        String userId = securityUtils.getCurrentUserId();
+        TaskResponse task = taskService.updateTaskStatus(id, request.taskStatus(), userId);
+        return ResponseEntity.ok(task);
     }
 
     @DeleteMapping("/{id}")
