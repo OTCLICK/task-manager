@@ -37,13 +37,7 @@ import com.example.mobile.data.model.EventCreateRequest
 import com.example.mobile.presentation.EVENT_STATUS_OPTIONS
 import com.example.mobile.presentation.eventStatusRu
 import com.example.mobile.presentation.viewmodel.CreateEventViewModel
-
-/** Частая опечатка: T10-00 вместо T10:00 для ISO-8601 LocalDateTime на сервере. */
-private fun normalizeLocalDateTimeInput(raw: String): String {
-    val t = raw.trim()
-    if (t.isEmpty()) return t
-    return t.replace(Regex("T(\\d{2})-(\\d{2})$"), "T$1:$2")
-}
+import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,8 +48,8 @@ fun CreateEventScreen(
 ) {
     var name by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var startTime by remember { mutableStateOf("") }
-    var endTime by remember { mutableStateOf("") }
+    var startAt by remember { mutableStateOf<LocalDateTime?>(null) }
+    var endAt by remember { mutableStateOf<LocalDateTime?>(null) }
     var participantsCount by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("PLANNED") }
     var statusMenuExpanded by remember { mutableStateOf(false) }
@@ -102,20 +96,20 @@ fun CreateEventScreen(
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
             )
 
-            OutlinedTextField(
-                value = startTime,
-                onValueChange = { startTime = it },
-                label = { Text("Начало (ГГГГ-ММ-ДДTЧЧ:ММ)") },
-                placeholder = { Text("2026-06-01T10:00") },
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            DateTimePickerField(
+                value = startAt,
+                onValueChange = { startAt = it },
+                label = "Начало мероприятия",
+                modifier = Modifier.padding(top = 12.dp),
+                allowClear = true
             )
 
-            OutlinedTextField(
-                value = endTime,
-                onValueChange = { endTime = it },
-                label = { Text("Окончание (ГГГГ-ММ-ДДTЧЧ:ММ)") },
-                placeholder = { Text("2026-06-01T18:00") },
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+            DateTimePickerField(
+                value = endAt,
+                onValueChange = { endAt = it },
+                label = "Окончание мероприятия",
+                modifier = Modifier.padding(top = 12.dp),
+                allowClear = true
             )
 
             OutlinedTextField(
@@ -164,15 +158,13 @@ fun CreateEventScreen(
                     }
 
                     val count = participantsCount.toIntOrNull()
-                    val startNormalized = normalizeLocalDateTimeInput(startTime)
-                    val endNormalized = normalizeLocalDateTimeInput(endTime)
                     val request = EventCreateRequest(
                         name = name,
                         address = address,
                         participatesCount = count,
                         status = if (status.isNotBlank()) status else "PLANNED",
-                        startTime = startNormalized.takeIf { it.isNotBlank() },
-                        endTime = endNormalized.takeIf { it.isNotBlank() }
+                        startTime = startAt?.toApiDateTimeString(),
+                        endTime = endAt?.toApiDateTimeString()
                     )
                     viewModel.createEvent(request)
                 },

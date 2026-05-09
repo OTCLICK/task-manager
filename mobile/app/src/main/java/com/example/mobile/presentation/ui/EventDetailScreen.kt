@@ -2,18 +2,26 @@ package com.example.mobile.presentation.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -29,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
@@ -52,14 +62,17 @@ import com.example.mobile.presentation.participationRoleRu
 import com.example.mobile.presentation.taskPriorityRu
 import com.example.mobile.presentation.taskStatusRu
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
+import java.time.LocalDateTime
 
 private const val ROLE_PERFORMER = "PERFORMER"
 
-private fun normalizeLocalDateTimeInput(raw: String): String {
-    val t = raw.trim()
-    if (t.isEmpty()) return t
-    return t.replace(Regex("T(\\d{2})-(\\d{2})$"), "T$1:$2")
-}
+private const val KANBAN_ROW_HEIGHT_DP = 392
+
+private data class ZoneBoardDescriptor(
+    val zoneId: String?,
+    val title: String,
+    val subtitle: String?
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +81,51 @@ fun EventDetailScreen(
     onBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
+    val boardDescriptors = remember(state.zones, state.tasks) {
+        if (state.tasks.isEmpty()) emptyList()
+        else buildList {
+            val knownZoneIds = state.zones.map { it.id }.toSet()
+            val zoneIdsFromTasks = state.tasks.mapNotNull { it.zone?.id }.toSet()
+            if (state.zones.isNotEmpty()) {
+                state.zones.forEach { z ->
+                    add(
+                        ZoneBoardDescriptor(
+                            zoneId = z.id,
+                            title = z.name,
+                            subtitle = z.description?.takeIf { it.isNotBlank() }
+                        )
+                    )
+                }
+            }
+            zoneIdsFromTasks.subtract(knownZoneIds).forEach { orphanId ->
+                val sample = state.tasks.firstOrNull { it.zone?.id == orphanId }?.zone
+                add(
+                    ZoneBoardDescriptor(
+                        zoneId = orphanId,
+                        title = sample?.name ?: "Зона",
+                        subtitle = sample?.description?.takeIf { it.isNotBlank() }
+                    )
+                )
+            }
+            if (state.tasks.any { it.zone == null }) {
+                add(
+                    ZoneBoardDescriptor(
+                        zoneId = null,
+                        title = if (state.zones.isEmpty() && zoneIdsFromTasks.isEmpty()) {
+                            "Все задачи"
+                        } else {
+                            "Вне зон"
+                        },
+                        subtitle = if (state.zones.isEmpty() && zoneIdsFromTasks.isEmpty()) {
+                            null
+                        } else {
+                            "Без привязки к зоне"
+                        }
+                    )
+                )
+            }
+        }
+    }
     var showZoneDialog by remember { mutableStateOf(false) }
     var showTaskDialog by remember { mutableStateOf(false) }
     var taskToDelete by remember { mutableStateOf<String?>(null) }
@@ -249,9 +307,15 @@ fun EventDetailScreen(
 
             item {
                 Text(
-                    "Задачи",
+                    "Доска задач",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 8.dp)
+                )
+                Text(
+                    "Колонки — статусы, строки — зоны. Горизонтальная прокрутка колонок.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
             if (state.tasks.isEmpty()) {
@@ -262,15 +326,209 @@ fun EventDetailScreen(
                     )
                 }
             } else {
-                items(state.tasks, key = { it.id }) { task ->
-                    TaskCardWithStatus(
-                        task = task,
-                        onStatusChange = { newStatus ->
-                            viewModel.updateTaskStatus(task.id, newStatus)
+                items(boardDescriptors, key = { "${it.zoneId ?: "none"}-${it.title}" }) { lane ->
+                    ZoneKanbanSwimlane(
+                        descriptor = lane,
+                        allTasks = state.tasks,
+                        onStatusChange = { taskId, newStatus ->
+                            viewModel.updateTaskStatus(taskId, newStatus)
                         },
-                        onDelete = { taskToDelete = task.id }
+                        onDelete = { id -> taskToDelete = id }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoneKanbanSwimlane(
+    descriptor: ZoneBoardDescriptor,
+    allTasks: List<Task>,
+    onStatusChange: (taskId: String, newStatus: String) -> Unit,
+    onDelete: (String) -> Unit
+) {
+    val tasksInLane = remember(descriptor.zoneId, allTasks) {
+        allTasks.filter { task ->
+            when (descriptor.zoneId) {
+                null -> task.zone == null
+                else -> task.zone?.id == descriptor.zoneId
+            }
+        }
+    }
+    Column(Modifier.fillMaxWidth()) {
+        Text(descriptor.title, style = MaterialTheme.typography.titleSmall)
+        descriptor.subtitle?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .height(KANBAN_ROW_HEIGHT_DP.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            TASK_STATUS_OPTIONS.forEach { status ->
+                KanbanStatusColumn(
+                    status = status,
+                    tasks = tasksInLane.filter { it.status == status },
+                    modifier = Modifier
+                        .width(176.dp)
+                        .fillMaxHeight(),
+                    onStatusChange = onStatusChange,
+                    onDelete = onDelete
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun KanbanStatusColumn(
+    status: String,
+    tasks: List<Task>,
+    modifier: Modifier = Modifier,
+    onStatusChange: (taskId: String, newStatus: String) -> Unit,
+    onDelete: (String) -> Unit
+) {
+    Column(modifier) {
+        Text(
+            "${taskStatusRu(status)} · ${tasks.size}",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (tasks.isEmpty()) {
+                    Text(
+                        "Пусто",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(vertical = 16.dp)
+                            .fillMaxWidth()
+                    )
+                } else {
+                    tasks.forEach { task ->
+                        TaskKanbanCard(
+                            task = task,
+                            onStatusChange = { newStatus ->
+                                if (newStatus != task.status) onStatusChange(task.id, newStatus)
+                            },
+                            onDelete = { onDelete(task.id) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskKanbanCard(
+    task: Task,
+    onStatusChange: (String) -> Unit,
+    onDelete: () -> Unit
+) {
+    var statusMenuOpen by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = taskPriorityCardColors(task.priority),
+        border = BorderStroke(
+            width = 1.dp,
+            color = taskPriorityAccentColor(task.priority).copy(alpha = 0.55f)
+        )
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Icon(
+                        Icons.Filled.Delete,
+                        contentDescription = "Удалить задачу",
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            task.description?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                )
+            }
+            Text(
+                taskPriorityRu(task.priority),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = taskPriorityAccentColor(task.priority),
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = taskStatusRu(task.status),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { statusMenuOpen = true }
+                        .padding(vertical = 6.dp)
+                )
+                DropdownMenu(
+                    expanded = statusMenuOpen,
+                    onDismissRequest = { statusMenuOpen = false }
+                ) {
+                    TASK_STATUS_OPTIONS.forEach { s ->
+                        DropdownMenuItem(
+                            text = { Text(taskStatusRu(s)) },
+                            onClick = {
+                                statusMenuOpen = false
+                                onStatusChange(s)
+                            }
+                        )
+                    }
+                }
+            }
+            if (task.performers.isNotEmpty()) {
+                Text(
+                    text = task.performers.joinToString { it.email },
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
         }
     }
@@ -302,81 +560,6 @@ private fun taskPriorityAccentColor(priority: String) = when (priority.uppercase
     "MEDIUM" -> MaterialTheme.colorScheme.tertiary
     "LOW" -> MaterialTheme.colorScheme.secondary
     else -> MaterialTheme.colorScheme.outline
-}
-
-@Composable
-private fun TaskCardWithStatus(
-    task: Task,
-    onStatusChange: (String) -> Unit,
-    onDelete: () -> Unit
-) {
-    var statusMenuOpen by remember { mutableStateOf(false) }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = taskPriorityCardColors(task.priority),
-        border = BorderStroke(
-            width = 1.dp,
-            color = taskPriorityAccentColor(task.priority).copy(alpha = 0.55f)
-        )
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Text(task.title, style = MaterialTheme.typography.titleSmall)
-            task.description?.takeIf { it.isNotBlank() }?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall)
-            }
-            Text(
-                "Приоритет: ${taskPriorityRu(task.priority)}",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = taskPriorityAccentColor(task.priority),
-                modifier = Modifier.padding(top = 4.dp)
-            )
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = taskStatusRu(task.status),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Статус") },
-                    trailingIcon = {
-                        IconButton(onClick = { statusMenuOpen = !statusMenuOpen }) {
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать статус")
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { statusMenuOpen = true }
-                )
-                DropdownMenu(
-                    expanded = statusMenuOpen,
-                    onDismissRequest = { statusMenuOpen = false }
-                ) {
-                    TASK_STATUS_OPTIONS.forEach { s ->
-                        DropdownMenuItem(
-                            text = { Text(taskStatusRu(s)) },
-                            onClick = {
-                                statusMenuOpen = false
-                                if (s != task.status) onStatusChange(s)
-                            }
-                        )
-                    }
-                }
-            }
-            Text(
-                text = task.zone?.let { z -> "Зона: ${z.name}" } ?: "Зона: не указана",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-            if (task.performers.isNotEmpty()) {
-                Text(
-                    text = "Исполнители: " + task.performers.joinToString { it.email },
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-            TextButton(onClick = onDelete) {
-                Text("Удалить", color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
 }
 
 @Composable
@@ -446,7 +629,7 @@ private fun CreateTaskDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var deadline by remember { mutableStateOf("") }
+    var deadlineAt by remember { mutableStateOf<LocalDateTime?>(null) }
     var priority by remember { mutableStateOf("MEDIUM") }
     var priorityExpanded by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
@@ -541,11 +724,12 @@ private fun CreateTaskDialog(
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = deadline,
-                    onValueChange = { deadline = it },
-                    label = { Text("Дедлайн (ГГГГ-ММ-ДДTЧЧ:ММ)") },
-                    modifier = Modifier.fillMaxWidth()
+                DateTimePickerField(
+                    value = deadlineAt,
+                    onValueChange = { deadlineAt = it },
+                    label = "Дедлайн",
+                    modifier = Modifier.fillMaxWidth(),
+                    allowClear = true
                 )
                 Text(
                     "Исполнители (${participationRoleRu("PERFORMER")})",
@@ -597,7 +781,7 @@ private fun CreateTaskDialog(
                             description.trim().takeIf { it.isNotEmpty() },
                             selectedZone?.id,
                             priority.takeIf { it.isNotBlank() },
-                            normalizeLocalDateTimeInput(deadline).takeIf { it.isNotBlank() },
+                            deadlineAt?.toApiDateTimeString(),
                             ids
                         )
                     }
