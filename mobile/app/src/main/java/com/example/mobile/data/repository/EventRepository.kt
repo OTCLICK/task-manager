@@ -41,7 +41,7 @@ class EventRepository(
             val response = api.getAllEvents()
 
             if (!response.isSuccessful || response.body() == null) {
-                return Result.failure(IllegalStateException("Не удалось загрузить мероприятия: ${response.message()}"))
+                return Result.failure(IllegalStateException(response.toUserFacingHttpError()))
             }
 
             val entities = response.body()!!.map { event ->

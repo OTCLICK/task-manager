@@ -4,6 +4,7 @@ import com.example.mobile.data.api.ApiClient
 import com.example.mobile.data.model.*
 import com.example.mobile.utils.Resource
 import com.example.mobile.utils.TokenManager
+import com.example.mobile.utils.toUserFacingHttpError
 
 class AuthRepository(
     private val tokenManager: TokenManager
@@ -20,7 +21,7 @@ class AuthRepository(
                 tokenManager.saveToken(response.body()!!.token)
                 Resource.Success(response.body()!!)
             } else {
-                Resource.Error("Ошибка входа: ${response.message()}")
+                Resource.Error(response.toUserFacingHttpError("Не удалось войти"))
             }
         } catch (e: Throwable) {
             Resource.Error("Нет подключения к серверу", e)
@@ -46,7 +47,7 @@ class AuthRepository(
                 tokenManager.saveToken(response.body()!!.token)
                 Resource.Success(response.body()!!)
             } else {
-                Resource.Error("Ошибка регистрации: ${response.message()}")
+                Resource.Error(response.toUserFacingHttpError("Не удалось зарегистрироваться"))
             }
         } catch (e: Throwable) {
             Resource.Error("Нет подключения к серверу", e)

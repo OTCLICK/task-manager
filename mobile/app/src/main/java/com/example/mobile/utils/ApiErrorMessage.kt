@@ -19,5 +19,5 @@ fun Response<*>.toUserFacingHttpError(fallback: String = "Запрос откл�
     val detail = apiErrorMessage()
     val reason = message().takeIf { it.isNotBlank() }
     val base = detail ?: reason ?: fallback
-    return "$base (HTTP ${code()})"
+    return "$base (код ответа: ${code()})"
 }

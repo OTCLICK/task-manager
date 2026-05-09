@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.mobile.presentation.eventStatusRu
 import com.example.mobile.presentation.viewmodel.EventListViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -131,7 +132,7 @@ fun EventListScreen(
                                     modifier = Modifier.padding(top = 4.dp)
                                 )
                                 Text(
-                                    "Статус: ${event.status}",
+                                    "Статус: ${eventStatusRu(event.status)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     modifier = Modifier.padding(top = 4.dp)
                                 )

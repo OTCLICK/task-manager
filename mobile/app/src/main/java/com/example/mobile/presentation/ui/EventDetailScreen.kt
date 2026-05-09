@@ -1,5 +1,6 @@
 package com.example.mobile.presentation.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,8 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -37,30 +40,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.Zone
+import com.example.mobile.presentation.TASK_PRIORITY_OPTIONS
+import com.example.mobile.presentation.TASK_STATUS_OPTIONS
+import com.example.mobile.presentation.eventStatusRu
+import com.example.mobile.presentation.participationRoleRu
+import com.example.mobile.presentation.taskPriorityRu
+import com.example.mobile.presentation.taskStatusRu
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
 
 private const val ROLE_PERFORMER = "PERFORMER"
-
-private val TASK_STATUS_OPTIONS = listOf(
-    "CREATED",
-    "IN_PROGRESS",
-    "HELP_REQUESTED",
-    "COMPLETED",
-    "CANCELLED"
-)
-
-private fun taskStatusRu(status: String): String = when (status) {
-    "CREATED" -> "Создана"
-    "IN_PROGRESS" -> "В работе"
-    "HELP_REQUESTED" -> "Нужна помощь"
-    "COMPLETED" -> "Выполнена"
-    "CANCELLED" -> "Отменена"
-    else -> status
-}
 
 private fun normalizeLocalDateTimeInput(raw: String): String {
     val t = raw.trim()
@@ -172,11 +165,31 @@ fun EventDetailScreen(
                         Column(Modifier.padding(12.dp)) {
                             Text(ev.address, style = MaterialTheme.typography.bodyMedium)
                             Text(
-                                "Статус: ${ev.status}",
+                                "Статус: ${eventStatusRu(ev.status)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(top = 4.dp)
                             )
                         }
+                    }
+                }
+            }
+
+            item {
+                state.cacheHint?.let { hint ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.dismissCacheHint() },
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Text(
+                            text = hint,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(12.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
                 }
             }
@@ -264,21 +277,57 @@ fun EventDetailScreen(
 }
 
 @Composable
+private fun taskPriorityCardColors(priority: String): CardColors {
+    val scheme = MaterialTheme.colorScheme
+    return when (priority.uppercase()) {
+        "HIGH" -> CardDefaults.cardColors(
+            containerColor = scheme.errorContainer,
+            contentColor = scheme.onErrorContainer
+        )
+        "MEDIUM" -> CardDefaults.cardColors(
+            containerColor = scheme.tertiaryContainer,
+            contentColor = scheme.onTertiaryContainer
+        )
+        "LOW" -> CardDefaults.cardColors(
+            containerColor = scheme.secondaryContainer,
+            contentColor = scheme.onSecondaryContainer
+        )
+        else -> CardDefaults.cardColors()
+    }
+}
+
+@Composable
+private fun taskPriorityAccentColor(priority: String) = when (priority.uppercase()) {
+    "HIGH" -> MaterialTheme.colorScheme.error
+    "MEDIUM" -> MaterialTheme.colorScheme.tertiary
+    "LOW" -> MaterialTheme.colorScheme.secondary
+    else -> MaterialTheme.colorScheme.outline
+}
+
+@Composable
 private fun TaskCardWithStatus(
     task: Task,
     onStatusChange: (String) -> Unit,
     onDelete: () -> Unit
 ) {
     var statusMenuOpen by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = taskPriorityCardColors(task.priority),
+        border = BorderStroke(
+            width = 1.dp,
+            color = taskPriorityAccentColor(task.priority).copy(alpha = 0.55f)
+        )
+    ) {
         Column(Modifier.padding(12.dp)) {
             Text(task.title, style = MaterialTheme.typography.titleSmall)
             task.description?.takeIf { it.isNotBlank() }?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall)
             }
             Text(
-                "Приоритет: ${task.priority}",
-                style = MaterialTheme.typography.bodySmall,
+                "Приоритет: ${taskPriorityRu(task.priority)}",
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = taskPriorityAccentColor(task.priority),
                 modifier = Modifier.padding(top = 4.dp)
             )
             Box(modifier = Modifier.fillMaxWidth()) {
@@ -399,6 +448,7 @@ private fun CreateTaskDialog(
     var description by remember { mutableStateOf("") }
     var deadline by remember { mutableStateOf("") }
     var priority by remember { mutableStateOf("MEDIUM") }
+    var priorityExpanded by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
     var selectedZone by remember { mutableStateOf<Zone?>(null) }
     var selectedPerformerIds by remember { mutableStateOf(setOf<String>()) }
@@ -461,12 +511,36 @@ private fun CreateTaskDialog(
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = priority,
-                    onValueChange = { priority = it.uppercase() },
-                    label = { Text("Приоритет (LOW/MEDIUM/HIGH)") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = taskPriorityRu(priority),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Приоритет") },
+                        trailingIcon = {
+                            IconButton(onClick = { priorityExpanded = !priorityExpanded }) {
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Выбрать приоритет")
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { priorityExpanded = true }
+                    )
+                    DropdownMenu(
+                        expanded = priorityExpanded,
+                        onDismissRequest = { priorityExpanded = false }
+                    ) {
+                        TASK_PRIORITY_OPTIONS.forEach { code ->
+                            DropdownMenuItem(
+                                text = { Text(taskPriorityRu(code)) },
+                                onClick = {
+                                    priority = code
+                                    priorityExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = deadline,
                     onValueChange = { deadline = it },
@@ -474,7 +548,7 @@ private fun CreateTaskDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Исполнители (роль PERFORMER)",
+                    "Исполнители (${participationRoleRu("PERFORMER")})",
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.padding(top = 4.dp)
                 )

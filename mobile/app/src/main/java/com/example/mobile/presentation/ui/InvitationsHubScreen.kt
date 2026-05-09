@@ -24,14 +24,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.mobile.presentation.invitationStatusRu
+import com.example.mobile.presentation.participationRoleRu
 import com.example.mobile.presentation.viewmodel.InvitationsHubViewModel
-
-private fun invitationStatusRu(status: String): String = when (status) {
-    "PENDING" -> "Ожидает ответа"
-    "ACCEPTED" -> "Принято"
-    "DECLINED" -> "Отклонено"
-    else -> status
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,11 +117,11 @@ fun InvitationsHubScreen(
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             Text(inv.eventName, style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "От: ${inv.invitedByEmail}",
+                                                "Приглашение от: ${inv.invitedByEmail}",
                                                 style = MaterialTheme.typography.bodySmall
                                             )
                                             Text(
-                                                "Роль: ${inv.role}",
+                                                "Роль: ${participationRoleRu(inv.role)}",
                                                 style = MaterialTheme.typography.bodySmall
                                             )
                                             Row(
@@ -171,11 +166,11 @@ fun InvitationsHubScreen(
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             Text(inv.eventName, style = MaterialTheme.typography.titleMedium)
                                             Text(
-                                                "Кому: ${inv.invitedUserEmail}",
+                                                "Адресат: ${inv.invitedUserEmail}",
                                                 style = MaterialTheme.typography.bodySmall
                                             )
                                             Text(
-                                                "Роль: ${inv.role} · ${invitationStatusRu(inv.status)}",
+                                                "Роль: ${participationRoleRu(inv.role)} · ${invitationStatusRu(inv.status)}",
                                                 style = MaterialTheme.typography.bodySmall
                                             )
                                             TextButton(

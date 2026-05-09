@@ -50,7 +50,7 @@ fun LoginScreen(
             text = { Text(errorMessage) },
             confirmButton = {
                 TextButton(onClick = { showErrorDialog = false }) {
-                    Text("OK")
+                    Text("ОК")
                 }
             }
         )
@@ -93,7 +93,7 @@ private fun LoginContent(
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
-            label = { Text("Email") },
+            label = { Text("Почта") },
             modifier = Modifier.fillMaxWidth()
         )
 

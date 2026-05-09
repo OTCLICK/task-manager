@@ -22,7 +22,9 @@ data class EventDetailUiState(
     val participants: List<ParticipantApiModel> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val formError: String? = null
+    val formError: String? = null,
+    /** Подсказка, если хотя бы часть экрана взята из локального кэша (сеть недоступна или ошибка сервера). */
+    val cacheHint: String? = null
 )
 
 class EventDetailViewModel(
@@ -39,7 +41,9 @@ class EventDetailViewModel(
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null, formError = null) }
+            _uiState.update {
+                it.copy(isLoading = true, errorMessage = null, formError = null, cacheHint = null)
+            }
             val eventResult = repository.loadEvent(eventId)
             if (eventResult.isFailure) {
                 _uiState.update {
@@ -50,6 +54,7 @@ class EventDetailViewModel(
                 }
                 return@launch
             }
+            val eventLoad = eventResult.getOrNull()!!
             val zonesResult = repository.loadZones(eventId)
             val tasksResult = repository.loadTasks(eventId)
             val participantsResult = repository.loadParticipants(eventId)
@@ -65,14 +70,24 @@ class EventDetailViewModel(
                 }
             }.trim().ifBlank { null }
 
+            val anyFromCache = eventLoad.fromCache ||
+                zonesResult.getOrNull()?.fromCache == true ||
+                tasksResult.getOrNull()?.fromCache == true ||
+                participantsResult.getOrNull()?.fromCache == true
+
             _uiState.update {
                 it.copy(
                     isLoading = false,
-                    event = eventResult.getOrNull(),
-                    zones = zonesResult.getOrElse { emptyList() },
-                    tasks = tasksResult.getOrElse { emptyList() },
-                    participants = participantsResult.getOrElse { emptyList() },
-                    errorMessage = sideErr
+                    event = eventLoad.value,
+                    zones = zonesResult.getOrNull()?.value ?: emptyList(),
+                    tasks = tasksResult.getOrNull()?.value ?: emptyList(),
+                    participants = participantsResult.getOrNull()?.value ?: emptyList(),
+                    errorMessage = sideErr,
+                    cacheHint = if (anyFromCache) {
+                        "Показаны сохранённые данные. Проверьте сеть и при необходимости нажмите «Обновить»."
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -80,6 +95,10 @@ class EventDetailViewModel(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null, formError = null) }
+    }
+
+    fun dismissCacheHint() {
+        _uiState.update { it.copy(cacheHint = null) }
     }
 
     fun createZone(
