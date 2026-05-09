@@ -24,8 +24,12 @@ public class TaskController {
     }
 
     @GetMapping
-    public ResponseEntity<List<TaskResponse>> getAllTasks() {
-        List<TaskResponse> tasks = taskService.getAllTasks();
+    public ResponseEntity<List<TaskResponse>> getAllTasks(
+            @RequestParam(required = false) String eventId
+    ) {
+        List<TaskResponse> tasks = (eventId != null && !eventId.isBlank())
+                ? taskService.getTasksByEventId(eventId)
+                : taskService.getAllTasks();
         return ResponseEntity.ok(tasks);
     }
 

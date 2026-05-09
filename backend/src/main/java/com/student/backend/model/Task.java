@@ -21,6 +21,9 @@ public class Task extends BaseEntity {
 
     private Zone zone;
 
+    /** Мероприятие, к которому относится задача (в т.ч. без привязки к зоне). */
+    private Event event;
+
     private List<User> performers = new ArrayList<>();
 
     private User coordinator;
@@ -89,6 +92,16 @@ public class Task extends BaseEntity {
 
     public void setZone(Zone zone) {
         this.zone = zone;
+    }
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "event_id", nullable = true)
+    public Event getEvent() {
+        return event;
+    }
+
+    public void setEvent(Event event) {
+        this.event = event;
     }
 
     @ManyToMany(fetch = FetchType.LAZY)

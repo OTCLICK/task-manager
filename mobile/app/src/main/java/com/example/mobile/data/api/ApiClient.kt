@@ -8,6 +8,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
+//Мб автоматическую подстановку токена тут сделать
 object ApiClient {
     private fun createMoshi(): Moshi {
         return Moshi.Builder()
@@ -26,7 +27,7 @@ object ApiClient {
 
         val retrofit = Retrofit.Builder()
             .baseUrl(Constants.BASE_URL)
-            .client(OkHttpClient())
+            .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(createMoshi()))
             .build()
 

@@ -17,9 +17,11 @@ lifecycleRuntimeKtxVersion = "2.10.0"
 material = "1.13.0"
 moshiKotlin = "1.15.2"
 navigationFragmentKtx = "2.9.8"
+room = "2.8.4"
 retrofit = "3.0.0"
 navigationCompose = "2.9.8"
 okhttp-logging = "4.12.0"
+composeMaterialIconsExtended = "1.7.8"
 
 [libraries]
 androidx-constraintlayout = { module = "androidx.constraintlayout:constraintlayout", version.ref = "constraintlayout" }
@@ -52,6 +54,10 @@ retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit
 retrofit2-kotlinx-serialization-converter = { module = "com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter", version = "1.0.0" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp-logging" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-compose-material-icons = { module = "androidx.compose.material:material-icons-extended", version.ref = "composeMaterialIconsExtended" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

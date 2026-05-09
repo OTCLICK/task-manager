@@ -42,6 +42,13 @@ public class ZoneService {
     }
 
     @Transactional(readOnly = true)
+    public List<ZoneResponse> getZonesByEventId(String eventId) {
+        return zoneRepository.findByEventId(eventId).stream()
+                .map(this::toZoneResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public ZoneResponse getZoneById(String id) {
         Zone zone = zoneRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Зона не найдена"));

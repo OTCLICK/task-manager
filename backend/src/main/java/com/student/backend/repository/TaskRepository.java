@@ -2,6 +2,8 @@ package com.student.backend.repository;
 
 import com.student.backend.model.*;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,5 +36,8 @@ public interface TaskRepository extends JpaRepository<Task,String> {
     List<Task> findByCoordinatorId(String coordinatorId);
 
     List<Task> findByDeadline(LocalDateTime deadline);
+
+    @Query("SELECT t FROM Task t WHERE t.event.id = :eventId")
+    List<Task> findAllByEventId(@Param("eventId") String eventId);
 
 }

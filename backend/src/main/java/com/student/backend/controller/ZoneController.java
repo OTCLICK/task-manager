@@ -24,8 +24,12 @@ public class ZoneController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ZoneResponse>> getAllZones() {
-        List<ZoneResponse> zones = zoneService.getAllZones();
+    public ResponseEntity<List<ZoneResponse>> getAllZones(
+            @RequestParam(required = false) String eventId
+    ) {
+        List<ZoneResponse> zones = (eventId != null && !eventId.isBlank())
+                ? zoneService.getZonesByEventId(eventId)
+                : zoneService.getAllZones();
         return ResponseEntity.ok(zones);
     }
 

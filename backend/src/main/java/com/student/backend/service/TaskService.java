@@ -20,21 +20,31 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final ZoneRepository zoneRepository;
+    private final EventRepository eventRepository;
     private final ParticipationRepository participationRepository;
 
     public TaskService(TaskRepository taskRepository,
                        UserRepository userRepository,
                        ZoneRepository zoneRepository,
+                       EventRepository eventRepository,
                        ParticipationRepository participationRepository) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.zoneRepository = zoneRepository;
+        this.eventRepository = eventRepository;
         this.participationRepository = participationRepository;
     }
 
     @Transactional(readOnly = true)
     public List<TaskResponse> getAllTasks() {
         return taskRepository.findAll().stream()
+                .map(this::toTaskResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public List<TaskResponse> getTasksByEventId(String eventId) {
+        return taskRepository.findAllByEventId(eventId).stream()
                 .map(this::toTaskResponse)
                 .collect(Collectors.toList());
     }
@@ -64,12 +74,18 @@ public class TaskService {
             throw new AccessDeniedException("Только организатор и координатор могут создавать задачи");
         }
 
+        Event event = eventRepository.findById(request.eventId())
+                .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
+
         String zoneId = request.zoneId();
 
         Zone zone = null;
         if (zoneId != null) {
             zone = zoneRepository.findById(zoneId)
                     .orElseThrow(() -> new NotFoundException("Зона не найдена"));
+            if (!zone.getEvent().getId().equals(request.eventId())) {
+                throw new ValidationException("Зона не относится к этому мероприятию");
+            }
         }
 
         Task task = new Task(
@@ -82,6 +98,7 @@ public class TaskService {
                 LocalDateTime.now(),
                 LocalDateTime.now()
         );
+        task.setEvent(event);
 
 //        if (request.zoneId() != null) {
 //            Zone zone = zoneRepository.findById(request.zoneId())

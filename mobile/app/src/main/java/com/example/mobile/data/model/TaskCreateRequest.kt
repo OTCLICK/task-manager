@@ -6,5 +6,6 @@ data class TaskCreateRequest(
     val taskPriority: String? = null,
     val zoneId: String? = null,
     val performers: List<String>? = null,
-    val deadline: String? = null
+    val deadline: String? = null,
+    val eventId: String
 )

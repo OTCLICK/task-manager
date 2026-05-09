@@ -1,14 +1,18 @@
 package com.student.backend.service;
 
 import com.student.backend.dto.ParticipantResponse;
+import com.student.backend.dto.InvitationResponse;
 import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
 import com.student.backend.exception.ValidationException;
 import com.student.backend.model.Event;
+import com.student.backend.model.EventInvitation;
+import com.student.backend.model.InvitationStatus;
 import com.student.backend.model.Participation;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
 import com.student.backend.repository.EventRepository;
+import com.student.backend.repository.EventInvitationRepository;
 import com.student.backend.repository.ParticipationRepository;
 import com.student.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -22,15 +26,18 @@ import java.util.stream.Collectors;
 public class ParticipationService {
 
     private final ParticipationRepository participationRepository;
+    private final EventInvitationRepository invitationRepository;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
 
     public ParticipationService(
             ParticipationRepository participationRepository,
+            EventInvitationRepository invitationRepository,
             UserRepository userRepository,
             EventRepository eventRepository
     ) {
         this.participationRepository = participationRepository;
+        this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
     }
@@ -55,6 +62,112 @@ public class ParticipationService {
                 .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
 
         participationRepository.save(new Participation(user, event, UserRole.PERFORMER));
+    }
+
+    public void inviteParticipant(String organizerId, String eventId, String email, UserRole role) {
+        Participation organizerParticipation = participationRepository
+                .findByUserIdAndEventId(organizerId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+
+        if (organizerParticipation.getRole() != UserRole.ORGANIZER) {
+            throw new AccessDeniedException("Только организатор может приглашать участников");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new NotFoundException("Пользователь с таким email не найден"));
+
+        if (participationRepository.findByUserIdAndEventId(user.getId(), eventId).isPresent()) {
+            throw new ValidationException("Пользователь уже участвует в мероприятии");
+        }
+
+        UserRole targetRole = role == null ? UserRole.PERFORMER : role;
+        if (targetRole != UserRole.PERFORMER && targetRole != UserRole.COORDINATOR) {
+            throw new ValidationException("При приглашении допустимы только роли PERFORMER или COORDINATOR");
+        }
+
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
+
+        if (invitationRepository.findFirstByEventIdAndInvitedUserIdAndStatus(eventId, user.getId(), InvitationStatus.PENDING).isPresent()) {
+            throw new ValidationException("Для пользователя уже есть активное приглашение в это мероприятие");
+        }
+
+        User inviter = userRepository.findById(organizerId)
+                .orElseThrow(() -> new NotFoundException("Организатор не найден"));
+
+        EventInvitation invitation = new EventInvitation(
+                event,
+                user,
+                inviter,
+                targetRole,
+                InvitationStatus.PENDING,
+                java.time.LocalDateTime.now()
+        );
+        invitationRepository.save(invitation);
+    }
+
+    public void acceptInvitation(String eventId, String invitationId, String invitedUserId) {
+        EventInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Приглашение не найдено"));
+        if (!invitation.getEvent().getId().equals(eventId)) {
+            throw new ValidationException("Приглашение не относится к этому мероприятию");
+        }
+
+        if (!invitation.getInvitedUser().getId().equals(invitedUserId)) {
+            throw new AccessDeniedException("Недостаточно прав для принятия приглашения");
+        }
+        if (invitation.getStatus() != InvitationStatus.PENDING) {
+            throw new ValidationException("Приглашение уже обработано");
+        }
+        if (participationRepository.findByUserIdAndEventId(invitedUserId, invitation.getEvent().getId()).isPresent()) {
+            throw new ValidationException("Вы уже участвуете в этом мероприятии");
+        }
+
+        participationRepository.save(new Participation(
+                invitation.getInvitedUser(),
+                invitation.getEvent(),
+                invitation.getRole()
+        ));
+
+        invitation.setStatus(InvitationStatus.ACCEPTED);
+        invitation.setRespondedAt(java.time.LocalDateTime.now());
+        invitationRepository.save(invitation);
+    }
+
+    public void declineInvitation(String eventId, String invitationId, String invitedUserId) {
+        EventInvitation invitation = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Приглашение не найдено"));
+        if (!invitation.getEvent().getId().equals(eventId)) {
+            throw new ValidationException("Приглашение не относится к этому мероприятию");
+        }
+
+        if (!invitation.getInvitedUser().getId().equals(invitedUserId)) {
+            throw new AccessDeniedException("Недостаточно прав для отклонения приглашения");
+        }
+        if (invitation.getStatus() != InvitationStatus.PENDING) {
+            throw new ValidationException("Приглашение уже обработано");
+        }
+
+        invitation.setStatus(InvitationStatus.DECLINED);
+        invitation.setRespondedAt(java.time.LocalDateTime.now());
+        invitationRepository.save(invitation);
+    }
+
+    @Transactional(readOnly = true)
+    public List<InvitationResponse> getPendingInvitations(String eventId, String invitedUserId) {
+        return invitationRepository.findByEventIdAndInvitedUserIdAndStatus(eventId, invitedUserId, InvitationStatus.PENDING)
+                .stream()
+                .map(i -> new InvitationResponse(
+                        i.getId(),
+                        i.getEvent().getId(),
+                        i.getEvent().getName(),
+                        i.getInvitedBy().getId(),
+                        i.getInvitedBy().getEmail(),
+                        i.getRole(),
+                        i.getStatus(),
+                        i.getCreatedAt()
+                ))
+                .collect(Collectors.toList());
     }
 
     public void changeParticipantRole(String organizerId, String eventId, String targetUserId, UserRole newRole) {
