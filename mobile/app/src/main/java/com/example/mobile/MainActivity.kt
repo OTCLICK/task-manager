@@ -17,18 +17,22 @@ import com.example.mobile.data.local.DatabaseProvider
 import com.example.mobile.data.repository.EventRepository
 import com.example.mobile.data.repository.EventWorkspaceRepository
 import com.example.mobile.data.repository.InvitationRepository
+import com.example.mobile.data.repository.ProfileRepository
 import com.example.mobile.domain.CreateEventUseCase
 import com.example.mobile.presentation.ui.CreateEventScreen
 import com.example.mobile.presentation.ui.EventDetailScreen
 import com.example.mobile.presentation.ui.EventListScreen
 import com.example.mobile.presentation.ui.InvitationsHubScreen
 import com.example.mobile.presentation.ui.LoginScreen
+import com.example.mobile.presentation.ui.ProfileScreen
 import com.example.mobile.presentation.ui.RegisterScreen
 import com.example.mobile.presentation.ui.theme.MobileTheme
 import com.example.mobile.presentation.viewmodel.EventListViewModel
 import com.example.mobile.presentation.viewmodel.EventListViewModelFactory
 import com.example.mobile.presentation.viewmodel.InvitationsHubViewModel
 import com.example.mobile.presentation.viewmodel.InvitationsHubViewModelFactory
+import com.example.mobile.presentation.viewmodel.ProfileViewModel
+import com.example.mobile.presentation.viewmodel.ProfileViewModelFactory
 import com.example.mobile.presentation.viewmodel.AuthViewModelFactory
 import com.example.mobile.presentation.viewmodel.CreateEventViewModel
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
@@ -49,6 +53,7 @@ class MainActivity : ComponentActivity() {
         val eventListViewModelFactory = EventListViewModelFactory(eventRepository)
         val eventListViewModel = ViewModelProvider(this, eventListViewModelFactory)[EventListViewModel::class.java]
         val invitationRepository = InvitationRepository(tokenManager)
+        val profileRepository = ProfileRepository(tokenManager)
         val createEventUseCase = CreateEventUseCase(eventRepository)
         val createEventViewModel = CreateEventViewModel(createEventUseCase)
         val eventWorkspaceRepository = EventWorkspaceRepository(
@@ -98,11 +103,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenInvitationsHub = {
                                     navController.navigate("invitations-hub")
                                 },
-                                onLogout = {
-                                    viewModel.logout()
-                                    navController.navigate("login") {
-                                        popUpTo("events") { inclusive = true }
-                                    }
+                                onOpenProfile = {
+                                    navController.navigate("profile")
                                 },
                                 onCreateEvent = {
                                     navController.navigate("create-event")
@@ -124,6 +126,27 @@ class MainActivity : ComponentActivity() {
                                 onBack = { navController.popBackStack() }
                             )
                         }
+                        composable("profile") { backStackEntry ->
+                            val profileFactory = ProfileViewModelFactory(profileRepository)
+                            val profileViewModel = ViewModelProvider(
+                                backStackEntry,
+                                profileFactory
+                            )[ProfileViewModel::class.java]
+                            ProfileScreen(
+                                viewModel = profileViewModel,
+                                onBack = { navController.popBackStack() },
+                                onOpenInvitations = {
+                                    navController.navigate("invitations-hub")
+                                },
+                                onLogout = {
+                                    viewModel.logout()
+                                    navController.navigate("login") {
+                                        popUpTo("events") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
                         composable("invitations-hub") { backStackEntry ->
                             val hubFactory = InvitationsHubViewModelFactory(invitationRepository)
                             val hubViewModel = ViewModelProvider(

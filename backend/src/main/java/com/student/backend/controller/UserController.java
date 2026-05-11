@@ -1,7 +1,7 @@
 package com.student.backend.controller;
 
 import com.student.backend.dto.UserResponse;
-import com.student.backend.model.UserRole;
+import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,9 +13,18 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final SecurityUtils securityUtils;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, SecurityUtils securityUtils) {
         this.userService = userService;
+        this.securityUtils = securityUtils;
+    }
+
+    /** Текущий пользователь по JWT (должен быть объявлен до {@code /{id}}, иначе {@code me} попадёт в id). */
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> getCurrentUser() {
+        String userId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(userService.findById(userId));
     }
 
     @GetMapping

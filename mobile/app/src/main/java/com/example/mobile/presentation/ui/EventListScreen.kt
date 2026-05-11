@@ -38,7 +38,7 @@ fun EventListScreen(
     viewModel: EventListViewModel,
     onOpenEvent: (String) -> Unit,
     onOpenInvitationsHub: () -> Unit,
-    onLogout: () -> Unit,
+    onOpenProfile: () -> Unit,
     onCreateEvent: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -54,14 +54,14 @@ fun EventListScreen(
             TopAppBar(
                 title = { Text("Мероприятия") },
                 actions = {
+                    TextButton(onClick = onOpenProfile) {
+                        Text("Профиль")
+                    }
                     TextButton(onClick = onOpenInvitationsHub) {
                         Text("Приглашения")
                     }
                     TextButton(onClick = { viewModel.refresh() }) {
                         Text("Обновить")
-                    }
-                    TextButton(onClick = onLogout) {
-                        Text("Выйти")
                     }
                 }
             )

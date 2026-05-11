@@ -101,6 +101,9 @@ interface ApiService {
     @GET("users")
     suspend fun getUsers(): Response<List<User>>
 
+    @GET("users/me")
+    suspend fun getCurrentUser(): Response<User>
+
     @GET("users/search")
     suspend fun searchUsers(@Query("q") query: String): Response<List<User>>
 
