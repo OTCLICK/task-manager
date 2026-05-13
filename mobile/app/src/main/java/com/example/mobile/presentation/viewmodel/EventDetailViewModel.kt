@@ -20,6 +20,8 @@ data class EventDetailUiState(
     val zones: List<Zone> = emptyList(),
     val tasks: List<Task> = emptyList(),
     val participants: List<ParticipantApiModel> = emptyList(),
+    /** Текущий пользователь — организатор этого мероприятия (может приглашать по API). */
+    val canInviteParticipants: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val formError: String? = null,
@@ -55,9 +57,14 @@ class EventDetailViewModel(
                 return@launch
             }
             val eventLoad = eventResult.getOrNull()!!
+            val meResult = repository.getCurrentUser()
+            val meId = meResult.getOrNull()?.id
             val zonesResult = repository.loadZones(eventId)
             val tasksResult = repository.loadTasks(eventId)
             val participantsResult = repository.loadParticipants(eventId)
+            val participants = participantsResult.getOrNull()?.value ?: emptyList()
+            val canInvite = meId != null &&
+                participants.any { it.userId == meId && it.role.equals("ORGANIZER", ignoreCase = true) }
             val sideErr = buildString {
                 zonesResult.exceptionOrNull()?.message?.let { append(it) }
                 tasksResult.exceptionOrNull()?.message?.let {
@@ -81,7 +88,8 @@ class EventDetailViewModel(
                     event = eventLoad.value,
                     zones = zonesResult.getOrNull()?.value ?: emptyList(),
                     tasks = tasksResult.getOrNull()?.value ?: emptyList(),
-                    participants = participantsResult.getOrNull()?.value ?: emptyList(),
+                    participants = participants,
+                    canInviteParticipants = canInvite,
                     errorMessage = sideErr,
                     cacheHint = if (anyFromCache) {
                         "Показаны сохранённые данные. Проверьте сеть и при необходимости нажмите «Обновить»."

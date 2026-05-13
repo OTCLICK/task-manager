@@ -1,5 +1,27 @@
 package com.example.mobile.presentation
 
+import com.example.mobile.data.model.FullName
+import com.example.mobile.data.model.ParticipantApiModel
+
+fun formatFullNameRu(fullName: FullName): String {
+    val patronymic = fullName.patronymic?.takeIf { it.isNotBlank() }
+    return buildString {
+        append(fullName.surname.trim())
+        append(' ')
+        append(fullName.name.trim())
+        if (patronymic != null) {
+            append(' ')
+            append(patronymic.trim())
+        }
+    }
+}
+
+fun participantDisplayTitle(p: ParticipantApiModel): String {
+    val fn = p.fullName
+    val fromName = fn?.let { formatFullNameRu(it).trim().takeIf { s -> s.isNotBlank() } }
+    return fromName ?: p.email
+}
+
 fun participationRoleRu(role: String): String = when (role) {
     "ORGANIZER" -> "Организатор"
     "COORDINATOR" -> "Координатор"
@@ -35,6 +57,7 @@ fun invitationStatusRu(status: String): String = when (status) {
     "PENDING" -> "Ожидает ответа"
     "ACCEPTED" -> "Принято"
     "DECLINED" -> "Отклонено"
+    "CANCELLED" -> "Отменено отправителем"
     else -> status
 }
 

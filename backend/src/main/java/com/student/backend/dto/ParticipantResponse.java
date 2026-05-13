@@ -5,5 +5,6 @@ import com.student.backend.model.UserRole;
 public record ParticipantResponse(
         String userId,
         String email,
-        UserRole role
+        UserRole role,
+        FullNameDto fullName
 ) {}

@@ -6,6 +6,8 @@ import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.ParticipationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,5 +35,13 @@ public class MyInvitationsController {
     public ResponseEntity<List<SentInvitationResponse>> getSent() {
         String userId = securityUtils.getCurrentUserId();
         return ResponseEntity.ok(participationService.getSentInvitationsForUser(userId));
+    }
+
+    /** Отменить отправленное приглашение (тот же базовый путь, что у списка «От меня»). */
+    @PostMapping("/sent/{invitationId}/withdraw")
+    public ResponseEntity<Void> withdrawSentInvitation(@PathVariable String invitationId) {
+        String userId = securityUtils.getCurrentUserId();
+        participationService.withdrawSentInvitationById(userId, invitationId);
+        return ResponseEntity.ok().build();
     }
 }

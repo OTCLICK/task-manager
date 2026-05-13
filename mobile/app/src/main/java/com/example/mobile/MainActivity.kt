@@ -21,6 +21,8 @@ import com.example.mobile.data.repository.ProfileRepository
 import com.example.mobile.domain.CreateEventUseCase
 import com.example.mobile.presentation.ui.CreateEventScreen
 import com.example.mobile.presentation.ui.EventDetailScreen
+import com.example.mobile.presentation.ui.EventInviteScreen
+import com.example.mobile.presentation.ui.EventParticipantsScreen
 import com.example.mobile.presentation.ui.EventListScreen
 import com.example.mobile.presentation.ui.InvitationsHubScreen
 import com.example.mobile.presentation.ui.LoginScreen
@@ -37,6 +39,10 @@ import com.example.mobile.presentation.viewmodel.AuthViewModelFactory
 import com.example.mobile.presentation.viewmodel.CreateEventViewModel
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
 import com.example.mobile.presentation.viewmodel.EventDetailViewModelFactory
+import com.example.mobile.presentation.viewmodel.EventInviteViewModel
+import com.example.mobile.presentation.viewmodel.EventInviteViewModelFactory
+import com.example.mobile.presentation.viewmodel.EventParticipantsViewModel
+import com.example.mobile.presentation.viewmodel.EventParticipantsViewModelFactory
 import com.example.mobile.utils.TokenManager
 
 class MainActivity : ComponentActivity() {
@@ -111,6 +117,44 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+                        composable("event/{eventId}/invite") { backStackEntry ->
+                            val eventId = backStackEntry.arguments?.getString("eventId").orEmpty()
+                            val inviteFactory = EventInviteViewModelFactory(
+                                eventWorkspaceRepository,
+                                eventId
+                            )
+                            val inviteViewModel = ViewModelProvider(
+                                backStackEntry,
+                                inviteFactory
+                            )[EventInviteViewModel::class.java]
+                            EventInviteScreen(
+                                viewModel = inviteViewModel,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable("event/{eventId}/participants") { backStackEntry ->
+                            val eventId = backStackEntry.arguments?.getString("eventId").orEmpty()
+                            val participantsFactory = EventParticipantsViewModelFactory(
+                                eventWorkspaceRepository,
+                                eventId
+                            )
+                            val participantsViewModel = ViewModelProvider(
+                                backStackEntry,
+                                participantsFactory
+                            )[EventParticipantsViewModel::class.java]
+                            EventParticipantsScreen(
+                                viewModel = participantsViewModel,
+                                onBack = { navController.popBackStack() },
+                                onOpenUserProfile = { userId ->
+                                    val me = participantsViewModel.uiState.value.currentUserId
+                                    if (userId == me) {
+                                        navController.navigate("profile")
+                                    } else {
+                                        navController.navigate("profile/$userId")
+                                    }
+                                }
+                            )
+                        }
                         composable("event/{eventId}") { backStackEntry ->
                             val eventId = backStackEntry.arguments?.getString("eventId").orEmpty()
                             val detailFactory = EventDetailViewModelFactory(
@@ -123,7 +167,30 @@ class MainActivity : ComponentActivity() {
                             )[EventDetailViewModel::class.java]
                             EventDetailScreen(
                                 viewModel = detailViewModel,
-                                onBack = { navController.popBackStack() }
+                                onBack = { navController.popBackStack() },
+                                onOpenInviteParticipants = {
+                                    navController.navigate("event/$eventId/invite")
+                                },
+                                onOpenParticipants = {
+                                    navController.navigate("event/$eventId/participants")
+                                }
+                            )
+                        }
+                        composable("profile/{userId}") { backStackEntry ->
+                            val userId = backStackEntry.arguments?.getString("userId").orEmpty()
+                            val userProfileFactory = ProfileViewModelFactory(
+                                profileRepository,
+                                viewedUserId = userId
+                            )
+                            val userProfileViewModel = ViewModelProvider(
+                                backStackEntry,
+                                userProfileFactory
+                            )[ProfileViewModel::class.java]
+                            ProfileScreen(
+                                viewModel = userProfileViewModel,
+                                onBack = { navController.popBackStack() },
+                                onOpenInvitations = { },
+                                onLogout = { }
                             )
                         }
                         composable("profile") { backStackEntry ->

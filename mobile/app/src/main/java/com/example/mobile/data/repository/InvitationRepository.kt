@@ -119,4 +119,18 @@ class InvitationRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun withdrawSentInvitation(invitationId: String): Result<Unit> {
+        val token = tokenManager.tokenFlow.firstOrNull()
+            ?: return Result.failure(IllegalStateException("Не найден токен авторизации"))
+
+        return try {
+            val api = ApiClient.createAuthorizedApiService(token)
+            val response = api.withdrawSentInvitation(invitationId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
 }

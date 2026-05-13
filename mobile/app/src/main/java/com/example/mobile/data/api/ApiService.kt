@@ -5,8 +5,10 @@ import com.example.mobile.data.model.AuthResponse
 import com.example.mobile.data.model.Event
 import com.example.mobile.data.model.EventApiModel
 import com.example.mobile.data.model.EventCreateRequest
+import com.example.mobile.data.model.InviteParticipantRequest
 import com.example.mobile.data.model.InvitationApiModel
 import com.example.mobile.data.model.SentInvitationApiModel
+import com.example.mobile.data.model.PendingOutboundInvitationApiModel
 import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
@@ -40,6 +42,33 @@ interface ApiService {
 
     @GET("events/{eventId}/participants")
     suspend fun getParticipants(@Path("eventId") eventId: String): Response<List<ParticipantApiModel>>
+
+    @PATCH("events/{eventId}/participants/{participantId}/role")
+    suspend fun changeParticipantRole(
+        @Path("eventId") eventId: String,
+        @Path("participantId") participantId: String,
+        @Query("newRole") newRole: String
+    ): Response<Unit>
+
+    @POST("events/{eventId}/participants/{participantId}/remove")
+    suspend fun removeParticipant(
+        @Path("eventId") eventId: String,
+        @Path("participantId") participantId: String
+    ): Response<Unit>
+
+    @POST("events/{eventId}/participants/invite")
+    suspend fun inviteParticipant(
+        @Path("eventId") eventId: String,
+        @Body request: InviteParticipantRequest
+    ): Response<Unit>
+
+    @GET("events/{eventId}/participants/invitations/pending-outbound")
+    suspend fun getPendingOutboundInvitations(
+        @Path("eventId") eventId: String
+    ): Response<List<PendingOutboundInvitationApiModel>>
+
+    @POST("invitations/sent/{invitationId}/withdraw")
+    suspend fun withdrawSentInvitation(@Path("invitationId") invitationId: String): Response<Unit>
 
     @GET("invitations/incoming")
     suspend fun getIncomingInvitations(): Response<List<InvitationApiModel>>
@@ -103,6 +132,9 @@ interface ApiService {
 
     @GET("users/me")
     suspend fun getCurrentUser(): Response<User>
+
+    @GET("users/{id}")
+    suspend fun getUserById(@Path("id") id: String): Response<User>
 
     @GET("users/search")
     suspend fun searchUsers(@Query("q") query: String): Response<List<User>>

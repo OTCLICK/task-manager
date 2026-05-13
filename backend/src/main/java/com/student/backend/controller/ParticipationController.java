@@ -3,6 +3,7 @@ package com.student.backend.controller;
 import com.student.backend.dto.ParticipantResponse;
 import com.student.backend.dto.InviteParticipantRequest;
 import com.student.backend.dto.InvitationResponse;
+import com.student.backend.dto.PendingOutboundInvitationDto;
 import com.student.backend.model.UserRole;
 import com.student.backend.security.CustomUserDetails;
 import com.student.backend.service.ParticipationService;
@@ -74,6 +75,16 @@ public class ParticipationController {
         return ResponseEntity.ok().build();
     }
 
+    /** Исходящие приглашения в ожидании (только для организатора мероприятия). */
+    @GetMapping("/invitations/pending-outbound")
+    public ResponseEntity<List<PendingOutboundInvitationDto>> getPendingOutboundInvitations(
+            @PathVariable String eventId,
+            Authentication auth
+    ) {
+        String userId = ((CustomUserDetails) auth.getPrincipal()).getUserId();
+        return ResponseEntity.ok(participationService.getPendingOutboundInvitations(userId, eventId));
+    }
+
     // Изменить роль участника (только организатор)
     @PatchMapping("/{participantId}/role")
     public ResponseEntity<Void> changeRole(
@@ -84,6 +95,17 @@ public class ParticipationController {
     ) {
         String userId = ((CustomUserDetails) auth.getPrincipal()).getUserId();
         participationService.changeParticipantRole(userId, eventId, participantId, newRole);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{participantId}/remove")
+    public ResponseEntity<Void> removeParticipant(
+            @PathVariable String eventId,
+            @PathVariable String participantId,
+            Authentication auth
+    ) {
+        String userId = ((CustomUserDetails) auth.getPrincipal()).getUserId();
+        participationService.removeParticipant(userId, eventId, participantId);
         return ResponseEntity.ok().build();
     }
 

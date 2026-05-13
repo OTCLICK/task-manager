@@ -27,21 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.mobile.data.model.FullName
+import com.example.mobile.presentation.formatFullNameRu
 import com.example.mobile.presentation.viewmodel.ProfileViewModel
-
-private fun formatFullNameRu(fullName: FullName): String {
-    val patronymic = fullName.patronymic?.takeIf { it.isNotBlank() }
-    return buildString {
-        append(fullName.surname.trim())
-        append(' ')
-        append(fullName.name.trim())
-        if (patronymic != null) {
-            append(' ')
-            append(patronymic.trim())
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +43,9 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Профиль") },
+                title = {
+                    Text(if (state.isOwnProfile) "Профиль" else "Профиль участника")
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
@@ -136,18 +125,20 @@ fun ProfileScreen(
                     }
                 }
 
-                OutlinedButton(
-                    onClick = onOpenInvitations,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Приглашения")
-                }
+                if (state.isOwnProfile) {
+                    OutlinedButton(
+                        onClick = onOpenInvitations,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Приглашения")
+                    }
 
-                Button(
-                    onClick = onLogout,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Выйти из аккаунта")
+                    Button(
+                        onClick = onLogout,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Выйти из аккаунта")
+                    }
                 }
             }
         }

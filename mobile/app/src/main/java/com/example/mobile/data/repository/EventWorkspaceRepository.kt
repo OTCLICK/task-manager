@@ -5,10 +5,12 @@ import com.example.mobile.data.local.CachedWorkspaceEntity
 import com.example.mobile.data.local.WorkspaceCacheDao
 import com.example.mobile.data.local.WorkspaceCacheJson
 import com.example.mobile.data.model.EventApiModel
+import com.example.mobile.data.model.InviteParticipantRequest
 import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
 import com.example.mobile.data.model.TaskStatusPatchRequest
+import com.example.mobile.data.model.User
 import com.example.mobile.data.model.Zone
 import com.example.mobile.data.model.ZoneCreateRequest
 import com.example.mobile.utils.TokenManager
@@ -125,6 +127,30 @@ class EventWorkspaceRepository(
         return Result.success(ValueWithCacheFlag(parsed, fromCache = true))
     }
 
+    suspend fun changeParticipantRole(
+        eventId: String,
+        participantUserId: String,
+        newRole: String
+    ): Result<Unit> {
+        return try {
+            val response = authorizedApi().changeParticipantRole(eventId, participantUserId, newRole)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeParticipant(eventId: String, participantUserId: String): Result<Unit> {
+        return try {
+            val response = authorizedApi().removeParticipant(eventId, participantUserId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun loadParticipants(eventId: String): Result<ValueWithCacheFlag<List<ParticipantApiModel>>> {
         return try {
             val response = authorizedApi().getParticipants(eventId)
@@ -185,6 +211,61 @@ class EventWorkspaceRepository(
             )
             if (response.isSuccessful) Result.success(Unit)
             else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getCurrentUser(): Result<User> {
+        return try {
+            val response = authorizedApi().getCurrentUser()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun searchUsers(query: String): Result<List<User>> {
+        val q = query.trim()
+        if (q.length < 2) return Result.success(emptyList())
+        return try {
+            val response = authorizedApi().searchUsers(q)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun inviteParticipant(eventId: String, email: String, role: String): Result<Unit> {
+        return try {
+            val response = authorizedApi().inviteParticipant(
+                eventId,
+                InviteParticipantRequest(email = email.trim(), role = role)
+            )
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    /** Email адресатов с исходящими приглашениями в ожидании (для скрытия в поиске на экране приглашения). */
+    suspend fun getPendingOutboundInviteEmails(eventId: String): Result<Set<String>> {
+        return try {
+            val response = authorizedApi().getPendingOutboundInvitations(eventId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!.map { it.invitedUserEmail.lowercase() }.toSet())
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
         } catch (e: Throwable) {
             Result.failure(e)
         }

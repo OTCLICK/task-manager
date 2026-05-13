@@ -1,7 +1,9 @@
 package com.student.backend.service;
 
+import com.student.backend.dto.FullNameDto;
 import com.student.backend.dto.ParticipantResponse;
 import com.student.backend.dto.InvitationResponse;
+import com.student.backend.dto.PendingOutboundInvitationDto;
 import com.student.backend.dto.SentInvitationResponse;
 import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
@@ -205,6 +207,45 @@ public class ParticipationService {
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<PendingOutboundInvitationDto> getPendingOutboundInvitations(String userId, String eventId) {
+        Participation self = participationRepository
+                .findByUserIdAndEventId(userId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+        if (self.getRole() != UserRole.ORGANIZER) {
+            throw new AccessDeniedException("Только организатор может просматривать отправленные приглашения");
+        }
+        return invitationRepository
+                .findPendingOutboundForEventAndInviter(eventId, userId, InvitationStatus.PENDING)
+                .stream()
+                .map(i -> new PendingOutboundInvitationDto(i.getId(), i.getInvitedUser().getEmail()))
+                .collect(Collectors.toList());
+    }
+
+    public void withdrawSentInvitation(String currentUserId, String eventId, String invitationId) {
+        EventInvitation inv = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Приглашение не найдено"));
+        if (!inv.getEvent().getId().equals(eventId)) {
+            throw new NotFoundException("Приглашение не относится к этому мероприятию");
+        }
+        if (!inv.getInvitedBy().getId().equals(currentUserId)) {
+            throw new AccessDeniedException("Можно отменить только собственное приглашение");
+        }
+        if (inv.getStatus() != InvitationStatus.PENDING) {
+            throw new ValidationException("Приглашение уже обработано или отменено");
+        }
+        inv.setStatus(InvitationStatus.CANCELLED);
+        inv.setRespondedAt(java.time.LocalDateTime.now());
+        invitationRepository.save(inv);
+    }
+
+    /** Отзыв по id приглашения (eventId берётся из сущности — тот же путь, что у хаба /api/invitations). */
+    public void withdrawSentInvitationById(String currentUserId, String invitationId) {
+        EventInvitation inv = invitationRepository.findById(invitationId)
+                .orElseThrow(() -> new NotFoundException("Приглашение не найдено"));
+        withdrawSentInvitation(currentUserId, inv.getEvent().getId(), invitationId);
+    }
+
     public void changeParticipantRole(String organizerId, String eventId, String targetUserId, UserRole newRole) {
         Participation organizerParticipation = participationRepository
                 .findByUserIdAndEventId(organizerId, eventId)
@@ -233,14 +274,46 @@ public class ParticipationService {
         participationRepository.save(targetParticipation);
     }
 
+    public void removeParticipant(String organizerId, String eventId, String targetUserId) {
+        Participation organizerParticipation = participationRepository
+                .findByUserIdAndEventId(organizerId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+
+        if (organizerParticipation.getRole() != UserRole.ORGANIZER) {
+            throw new AccessDeniedException("Только организатор может исключать участников");
+        }
+
+        Participation targetParticipation = participationRepository
+                .findByUserIdAndEventId(targetUserId, eventId)
+                .orElseThrow(() -> new NotFoundException("Участник не найден в мероприятии"));
+
+        if (targetUserId.equals(organizerId)) {
+            throw new ValidationException("Нельзя исключить себя из мероприятия");
+        }
+        if (targetParticipation.getRole() == UserRole.ORGANIZER) {
+            throw new ValidationException("Нельзя исключить организатора");
+        }
+
+        participationRepository.delete(targetParticipation);
+    }
+
     @Transactional(readOnly = true)
     public List<ParticipantResponse> getParticipants(String eventId) {
         return participationRepository.findByEventId(eventId).stream()
-                .map(p -> new ParticipantResponse(
-                        p.getUser().getId(),
-                        p.getUser().getEmail(),
-                        p.getRole()
-                ))
+                .map(p -> {
+                    var fn = p.getUser().getFullName();
+                    FullNameDto fullNameDto = new FullNameDto(
+                            fn.getName(),
+                            fn.getSurname(),
+                            fn.getPatronymic()
+                    );
+                    return new ParticipantResponse(
+                            p.getUser().getId(),
+                            p.getUser().getEmail(),
+                            p.getRole(),
+                            fullNameDto
+                    );
+                })
                 .collect(Collectors.toList());
     }
 }

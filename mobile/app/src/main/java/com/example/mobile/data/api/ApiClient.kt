@@ -8,7 +8,6 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 
-//Мб автоматическую подстановку токена тут сделать
 object ApiClient {
     private fun createMoshi(): Moshi {
         return Moshi.Builder()
@@ -34,7 +33,6 @@ object ApiClient {
         return retrofit.create(ApiService::class.java)
     }
 
-    // TODO: позже использовать
     fun createAuthorizedApiService(authToken: String): ApiService {
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor { chain ->

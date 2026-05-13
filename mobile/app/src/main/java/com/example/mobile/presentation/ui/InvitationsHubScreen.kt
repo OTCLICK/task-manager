@@ -173,6 +173,16 @@ fun InvitationsHubScreen(
                                                 "Роль: ${participationRoleRu(inv.role)} · ${invitationStatusRu(inv.status)}",
                                                 style = MaterialTheme.typography.bodySmall
                                             )
+                                            if (inv.status.equals("PENDING", ignoreCase = true)) {
+                                                TextButton(
+                                                    onClick = {
+                                                        viewModel.withdrawSentInvitation(inv.invitationId)
+                                                    },
+                                                    modifier = Modifier.padding(top = 4.dp)
+                                                ) {
+                                                    Text("Отменить приглашение")
+                                                }
+                                            }
                                             TextButton(
                                                 onClick = { onOpenEvent(inv.eventId) },
                                                 modifier = Modifier.padding(top = 4.dp)

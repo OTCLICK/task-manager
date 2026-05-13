@@ -13,14 +13,19 @@ import kotlinx.coroutines.launch
 data class ProfileUiState(
     val user: User? = null,
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** false — просмотр карточки другого пользователя (без выхода и приглашений). */
+    val isOwnProfile: Boolean = true
 )
 
 class ProfileViewModel(
-    private val repository: ProfileRepository
+    private val repository: ProfileRepository,
+    private val viewedUserId: String? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ProfileUiState())
+    private val _uiState = MutableStateFlow(
+        ProfileUiState(isOwnProfile = viewedUserId == null)
+    )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
@@ -30,7 +35,11 @@ class ProfileViewModel(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val result = repository.getCurrentUser()
+            val result = if (viewedUserId == null) {
+                repository.getCurrentUser()
+            } else {
+                repository.getUserById(viewedUserId)
+            }
             _uiState.update {
                 if (result.isSuccess) {
                     it.copy(isLoading = false, user = result.getOrNull(), errorMessage = null)

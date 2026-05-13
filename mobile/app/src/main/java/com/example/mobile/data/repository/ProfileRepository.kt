@@ -24,4 +24,20 @@ class ProfileRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun getUserById(userId: String): Result<User> {
+        val token = tokenManager.tokenFlow.firstOrNull()
+            ?: return Result.failure(IllegalStateException("Не найден токен авторизации"))
+        return try {
+            val api = ApiClient.createAuthorizedApiService(token)
+            val response = api.getUserById(userId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
 }

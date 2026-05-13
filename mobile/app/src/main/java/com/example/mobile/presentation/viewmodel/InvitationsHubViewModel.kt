@@ -79,6 +79,17 @@ class InvitationsHubViewModel(
         }
     }
 
+    fun withdrawSentInvitation(invitationId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val result = repository.withdrawSentInvitation(invitationId)
+            if (result.isSuccess) refresh()
+            else _uiState.update {
+                it.copy(isLoading = false, errorMessage = result.exceptionOrNull()?.message)
+            }
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }

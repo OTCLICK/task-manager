@@ -1,6 +1,12 @@
+@file:OptIn(ExperimentalFoundationApi::class)
+
 package com.example.mobile.presentation.ui
 
+import android.content.ClipData
+import android.content.Context
+import android.view.DragEvent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.draganddrop.dragAndDropSource
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -44,11 +52,23 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.toAndroidDragEvent
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,11 +82,54 @@ import com.example.mobile.presentation.participationRoleRu
 import com.example.mobile.presentation.taskPriorityRu
 import com.example.mobile.presentation.taskStatusRu
 import com.example.mobile.presentation.viewmodel.EventDetailViewModel
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.launch
 
 private const val ROLE_PERFORMER = "PERFORMER"
 
 private const val KANBAN_ROW_HEIGHT_DP = 392
+
+private val KANBAN_COLUMN_WIDTH = 176.dp
+
+private const val KANBAN_TASK_CLIP_LABEL = "task_manager_kanban_task_id"
+
+/** Id задачи из сессии перетаскивания: сначала [DragEvent.getLocalState], затем элементы [ClipData]. */
+private fun taskIdFromKanbanDropEvent(ev: DragEvent, context: Context): String {
+    when (val ls = ev.localState) {
+        is String -> if (ls.isNotBlank()) return ls.trim()
+        is CharSequence -> if (ls.isNotBlank()) return ls.toString().trim()
+    }
+    val clip = ev.clipData ?: return ""
+    for (i in 0 until clip.itemCount) {
+        val item = clip.getItemAt(i) ?: continue
+        item.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val coerced = item.coerceToText(context)
+        if (coerced.isNotEmpty()) return coerced.toString().trim()
+    }
+    return ""
+}
+
+/** Полоса у левого/правого края видимой дорожки канбана (в координатах окна). */
+private val KANBAN_EDGE_SCROLL_MARGIN_DP = 24.dp
+
+private val KANBAN_EDGE_SCROLL_STEP_DP = 20.dp
+
+private const val KANBAN_EDGE_SCROLL_MIN_INTERVAL_MS = 72L
+
+private val taskDeadlineDisplayFormatter =
+    DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", Locale("ru", "RU"))
+
+/** Строка API (ISO) или instant → подпись для карточки; при ошибке разбора возвращается исходная строка. */
+private fun formatTaskDeadlineForCard(deadline: String?): String? {
+    val raw = deadline?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    val ldt = runCatching { LocalDateTime.parse(raw) }.getOrNull()
+        ?: runCatching { Instant.parse(raw).atZone(ZoneId.systemDefault()).toLocalDateTime() }.getOrNull()
+    return ldt?.format(taskDeadlineDisplayFormatter) ?: raw
+}
 
 private data class ZoneBoardDescriptor(
     val zoneId: String?,
@@ -78,7 +141,9 @@ private data class ZoneBoardDescriptor(
 @Composable
 fun EventDetailScreen(
     viewModel: EventDetailViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenInviteParticipants: () -> Unit = {},
+    onOpenParticipants: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     val boardDescriptors = remember(state.zones, state.tasks) {
@@ -190,6 +255,14 @@ fun EventDetailScreen(
                     }
                 },
                 actions = {
+                    TextButton(onClick = onOpenParticipants) {
+                        Text("Участники")
+                    }
+                    if (state.canInviteParticipants) {
+                        TextButton(onClick = onOpenInviteParticipants) {
+                            Text("Пригласить")
+                        }
+                    }
                     TextButton(onClick = { viewModel.refresh() }) {
                         Text("Обновить")
                     }
@@ -312,7 +385,7 @@ fun EventDetailScreen(
                     modifier = Modifier.padding(top = 8.dp)
                 )
                 Text(
-                    "Колонки — статусы, строки — зоны. Горизонтальная прокрутка колонок.",
+                    "Колонки — статусы, строки — зоны. Удерживайте карточку и перетащите в другой статус; у левого и правого края видимой полосы дорожка прокручивается.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp)
@@ -356,6 +429,33 @@ private fun ZoneKanbanSwimlane(
             }
         }
     }
+    val density = LocalDensity.current
+    val edgePx = remember(density) { with(density) { KANBAN_EDGE_SCROLL_MARGIN_DP.toPx() } }
+    val stepPx = remember(density) { with(density) { KANBAN_EDGE_SCROLL_STEP_DP.toPx() } }
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val laneBoundsInWindow = remember { mutableStateOf<Rect?>(null) }
+    val lastEdgeScrollAt = remember { mutableLongStateOf(0L) }
+
+    /** [dragXInWindow] — X в координатах окна (левая граница колонки + локальный x из DragEvent). */
+    val onLaneDragMoved = remember(scrollState, scope, edgePx, stepPx) {
+        scrollHandler@{ dragXInWindow: Float ->
+            val lane = laneBoundsInWindow.value ?: return@scrollHandler
+            val inLeftEdge = dragXInWindow < lane.left + edgePx
+            val inRightEdge = dragXInWindow > lane.right - edgePx
+            if (inLeftEdge || inRightEdge) {
+                val now = System.currentTimeMillis()
+                if (now - lastEdgeScrollAt.longValue >= KANBAN_EDGE_SCROLL_MIN_INTERVAL_MS) {
+                    lastEdgeScrollAt.longValue = now
+                    when {
+                        inLeftEdge -> scope.launch { scrollState.scroll { scrollBy(-stepPx) } }
+                        inRightEdge -> scope.launch { scrollState.scroll { scrollBy(stepPx) } }
+                    }
+                }
+            }
+        }
+    }
+
     Column(Modifier.fillMaxWidth()) {
         Text(descriptor.title, style = MaterialTheme.typography.titleSmall)
         descriptor.subtitle?.let {
@@ -366,24 +466,34 @@ private fun ZoneKanbanSwimlane(
                 modifier = Modifier.padding(top = 2.dp)
             )
         }
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp)
                 .height(KANBAN_ROW_HEIGHT_DP.dp)
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .onGloballyPositioned { coords ->
+                    laneBoundsInWindow.value = coords.boundsInWindow()
+                }
         ) {
-            TASK_STATUS_OPTIONS.forEach { status ->
-                KanbanStatusColumn(
-                    status = status,
-                    tasks = tasksInLane.filter { it.status == status },
-                    modifier = Modifier
-                        .width(176.dp)
-                        .fillMaxHeight(),
-                    onStatusChange = onStatusChange,
-                    onDelete = onDelete
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .horizontalScroll(scrollState),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                TASK_STATUS_OPTIONS.forEach { status ->
+                    KanbanStatusColumn(
+                        status = status,
+                        columnTasks = tasksInLane.filter { it.status == status },
+                        laneTasks = tasksInLane,
+                        modifier = Modifier
+                            .width(KANBAN_COLUMN_WIDTH)
+                            .fillMaxHeight(),
+                        onStatusChange = onStatusChange,
+                        onDelete = onDelete,
+                        onLaneDragMoved = onLaneDragMoved
+                    )
+                }
             }
         }
     }
@@ -392,49 +502,102 @@ private fun ZoneKanbanSwimlane(
 @Composable
 private fun KanbanStatusColumn(
     status: String,
-    tasks: List<Task>,
+    columnTasks: List<Task>,
+    /** Все задачи дорожки (зона): нужны, чтобы принять drop из другой колонки — там задача ещё со старым статусом. */
+    laneTasks: List<Task>,
     modifier: Modifier = Modifier,
     onStatusChange: (taskId: String, newStatus: String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    /** X палец/курсора в координатах окна (для симметричного автоскролла по краям видимой дорожки). */
+    onLaneDragMoved: (dragXInWindow: Float) -> Unit
 ) {
+    val dropContext = rememberUpdatedState(LocalContext.current)
+    val currentLaneTasks by rememberUpdatedState(laneTasks)
+    val currentStatus by rememberUpdatedState(status)
+    val currentOnStatus by rememberUpdatedState(onStatusChange)
+    val dragMoved by rememberUpdatedState(onLaneDragMoved)
+    val columnBoundsInWindow = remember { mutableStateOf<Rect?>(null) }
+    val acceptAnyDragSession = remember {
+        { _: DragAndDropEvent -> true }
+    }
+    val dropTarget = remember {
+        object : DragAndDropTarget {
+            override fun onMoved(event: DragAndDropEvent) {
+                val col = columnBoundsInWindow.value ?: return
+                val ev = try {
+                    event.toAndroidDragEvent()
+                } catch (_: Throwable) {
+                    return
+                }
+                dragMoved(col.left + ev.x)
+            }
+
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                val androidEv = try {
+                    event.toAndroidDragEvent()
+                } catch (_: Throwable) {
+                    return false
+                }
+                val taskId = taskIdFromKanbanDropEvent(androidEv, dropContext.value)
+                if (taskId.isEmpty()) return false
+                val task = currentLaneTasks.find { it.id == taskId } ?: return false
+                if (task.status == currentStatus) return true
+                currentOnStatus(taskId, currentStatus)
+                return true
+            }
+        }
+    }
+
     Column(modifier) {
         Text(
-            "${taskStatusRu(status)} · ${tasks.size}",
+            "${taskStatusRu(status)} · ${columnTasks.size}",
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(bottom = 6.dp)
         )
-        Surface(
-            modifier = Modifier
+        // Цель drop на Box вокруг Surface: иначе verticalScroll внутри Surface перехватывает сессию и drop в чужую колонку не срабатывает.
+        Box(
+            Modifier
+                .weight(1f)
                 .fillMaxWidth()
-                .weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+                .onGloballyPositioned { coords ->
+                    columnBoundsInWindow.value = coords.boundsInWindow()
+                }
+                .dragAndDropTarget(
+                    shouldStartDragAndDrop = acceptAnyDragSession,
+                    target = dropTarget
+                )
         ) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
             ) {
-                if (tasks.isEmpty()) {
-                    Text(
-                        "Пусто",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(vertical = 16.dp)
-                            .fillMaxWidth()
-                    )
-                } else {
-                    tasks.forEach { task ->
-                        TaskKanbanCard(
-                            task = task,
-                            onStatusChange = { newStatus ->
-                                if (newStatus != task.status) onStatusChange(task.id, newStatus)
-                            },
-                            onDelete = { onDelete(task.id) }
+                Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (columnTasks.isEmpty()) {
+                        Text(
+                            "Пусто",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(vertical = 16.dp)
+                                .fillMaxWidth()
                         )
+                    } else {
+                        columnTasks.forEach { task ->
+                            TaskKanbanCard(
+                                task = task,
+                                onStatusChange = { newStatus ->
+                                    if (newStatus != task.status) onStatusChange(task.id, newStatus)
+                                },
+                                onDelete = { onDelete(task.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -450,7 +613,15 @@ private fun TaskKanbanCard(
 ) {
     var statusMenuOpen by remember { mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .dragAndDropSource { _ ->
+                DragAndDropTransferData(
+                    clipData = ClipData.newPlainText(KANBAN_TASK_CLIP_LABEL, task.id),
+                    localState = task.id,
+                    flags = 0
+                )
+            },
         colors = taskPriorityCardColors(task.priority),
         border = BorderStroke(
             width = 1.dp,
@@ -487,6 +658,16 @@ private fun TaskKanbanCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                )
+            }
+            formatTaskDeadlineForCard(task.deadline)?.let { deadlineLine ->
+                Text(
+                    text = "До $deadlineLine",
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
             Text(
