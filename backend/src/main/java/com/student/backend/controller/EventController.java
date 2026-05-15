@@ -1,7 +1,9 @@
 package com.student.backend.controller;
 
 import com.student.backend.dto.EventCreateRequest;
+import com.student.backend.dto.EventPatchRequest;
 import com.student.backend.dto.EventResponse;
+import com.student.backend.dto.EventTaskReportResponse;
 import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.EventService;
 import jakarta.validation.Valid;
@@ -41,6 +43,21 @@ public class EventController {
         String organizerId = securityUtils.getCurrentUserId();
         EventResponse event = eventService.createEvent(request, organizerId);
         return ResponseEntity.status(HttpStatus.CREATED).body(event);
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<EventResponse> patchEvent(
+            @PathVariable String id,
+            @Valid @RequestBody EventPatchRequest request
+    ) {
+        String userId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(eventService.patchEvent(id, request, userId));
+    }
+
+    @GetMapping("/{id}/task-report")
+    public ResponseEntity<EventTaskReportResponse> getTaskReport(@PathVariable String id) {
+        String userId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(eventService.getEventTaskReport(id, userId));
     }
 
     @DeleteMapping("/{id}")

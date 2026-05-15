@@ -5,6 +5,9 @@ import com.example.mobile.data.model.AuthResponse
 import com.example.mobile.data.model.Event
 import com.example.mobile.data.model.EventApiModel
 import com.example.mobile.data.model.EventCreateRequest
+import com.example.mobile.data.model.EventPatchRequest
+import com.example.mobile.data.model.EventTaskReportResponse
+import com.example.mobile.data.model.FcmTokenRequest
 import com.example.mobile.data.model.InviteParticipantRequest
 import com.example.mobile.data.model.InvitationApiModel
 import com.example.mobile.data.model.SentInvitationApiModel
@@ -13,16 +16,19 @@ import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
 import com.example.mobile.data.model.TaskStatusPatchRequest
+import com.example.mobile.data.model.TaskUpdateRequest
 import com.example.mobile.data.model.User
 import com.example.mobile.data.model.UserCreateRequest
 import com.example.mobile.data.model.Zone
 import com.example.mobile.data.model.ZoneCreateRequest
+import com.example.mobile.data.model.ZoneMuteIdsRequest
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -97,6 +103,15 @@ interface ApiService {
     @DELETE("events/{id}")
     suspend fun deleteEvent(@Path("id") id: String): Response<Unit>
 
+    @PATCH("events/{id}")
+    suspend fun patchEvent(
+        @Path("id") id: String,
+        @Body body: EventPatchRequest
+    ): Response<EventApiModel>
+
+    @GET("events/{id}/task-report")
+    suspend fun getEventTaskReport(@Path("id") id: String): Response<EventTaskReportResponse>
+
     @GET("zones")
     suspend fun getZones(@Query("eventId") eventId: String?): Response<List<Zone>>
 
@@ -124,6 +139,18 @@ interface ApiService {
         @Body request: TaskStatusPatchRequest
     ): Response<Task>
 
+    @POST("tasks/{id}/decline-self")
+    suspend fun declineTaskSelf(@Path("id") id: String): Response<Task>
+
+    @POST("tasks/{id}/join-as-performer")
+    suspend fun joinTaskAsPerformer(@Path("id") id: String): Response<Task>
+
+    @PATCH("tasks/{id}")
+    suspend fun updateTask(
+        @Path("id") id: String,
+        @Body body: TaskUpdateRequest
+    ): Response<Task>
+
     @DELETE("tasks/{id}")
     suspend fun deleteTask(@Path("id") id: String): Response<Unit>
 
@@ -138,6 +165,18 @@ interface ApiService {
 
     @GET("users/search")
     suspend fun searchUsers(@Query("q") query: String): Response<List<User>>
+
+    @POST("users/me/fcm-token")
+    suspend fun registerFcmToken(@Body body: FcmTokenRequest): Response<Unit>
+
+    @DELETE("users/me/fcm-token")
+    suspend fun unregisterFcmToken(@Query("token") token: String?): Response<Unit>
+
+    @GET("users/me/zone-notification-mutes")
+    suspend fun getMutedZoneIds(): Response<List<String>>
+
+    @PUT("users/me/zone-notification-mutes")
+    suspend fun putMutedZoneIds(@Body body: ZoneMuteIdsRequest): Response<Unit>
 
 //    @GET("users/role/{role}")
 //    suspend fun getUsersByRole(@Path("role") role: String): Response<List<User>>

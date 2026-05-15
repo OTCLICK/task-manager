@@ -1,11 +1,16 @@
 package com.example.mobile
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -76,6 +81,16 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val token by tokenManager.tokenFlow.collectAsState(initial = null)
                     val startDestination = if (token.isNullOrBlank()) "login" else "events"
+
+                    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                        ActivityResultContracts.RequestPermission()
+                    ) { _ -> }
+
+                    LaunchedEffect(token) {
+                        if (Build.VERSION.SDK_INT >= 33 && !token.isNullOrBlank()) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
 
                     NavHost(navController = navController, startDestination = startDestination) {
                         composable("login") {

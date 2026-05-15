@@ -5,14 +5,18 @@ import com.example.mobile.data.local.CachedWorkspaceEntity
 import com.example.mobile.data.local.WorkspaceCacheDao
 import com.example.mobile.data.local.WorkspaceCacheJson
 import com.example.mobile.data.model.EventApiModel
+import com.example.mobile.data.model.EventPatchRequest
+import com.example.mobile.data.model.EventTaskReportResponse
 import com.example.mobile.data.model.InviteParticipantRequest
 import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.TaskCreateRequest
 import com.example.mobile.data.model.TaskStatusPatchRequest
+import com.example.mobile.data.model.TaskUpdateRequest
 import com.example.mobile.data.model.User
 import com.example.mobile.data.model.Zone
 import com.example.mobile.data.model.ZoneCreateRequest
+import com.example.mobile.data.model.ZoneMuteIdsRequest
 import com.example.mobile.utils.TokenManager
 import com.example.mobile.utils.toUserFacingHttpError
 import kotlinx.coroutines.flow.firstOrNull
@@ -203,6 +207,16 @@ class EventWorkspaceRepository(
         }
     }
 
+    suspend fun updateTask(taskId: String, request: TaskUpdateRequest): Result<Unit> {
+        return try {
+            val response = authorizedApi().updateTask(taskId, request)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun updateTaskStatus(taskId: String, taskStatus: String): Result<Unit> {
         return try {
             val response = authorizedApi().updateTaskStatus(
@@ -266,6 +280,75 @@ class EventWorkspaceRepository(
             } else {
                 Result.failure(IllegalStateException(response.toUserFacingHttpError()))
             }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun patchEventStatus(eventId: String, status: String): Result<EventApiModel> {
+        return try {
+            val response = authorizedApi().patchEvent(eventId, EventPatchRequest(status = status))
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun loadEventTaskReport(eventId: String): Result<EventTaskReportResponse> {
+        return try {
+            val response = authorizedApi().getEventTaskReport(eventId)
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun declineTaskSelf(taskId: String): Result<Unit> {
+        return try {
+            val response = authorizedApi().declineTaskSelf(taskId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun joinTaskAsPerformer(taskId: String): Result<Unit> {
+        return try {
+            val response = authorizedApi().joinTaskAsPerformer(taskId)
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getMutedZoneIds(): Result<List<String>> {
+        return try {
+            val response = authorizedApi().getMutedZoneIds()
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(IllegalStateException(response.toUserFacingHttpError()))
+            }
+        } catch (e: Throwable) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun replaceMutedZoneIds(zoneIds: List<String>): Result<Unit> {
+        return try {
+            val response = authorizedApi().putMutedZoneIds(ZoneMuteIdsRequest(mutedZoneIds = zoneIds))
+            if (response.isSuccessful) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.toUserFacingHttpError()))
         } catch (e: Throwable) {
             Result.failure(e)
         }

@@ -3,6 +3,7 @@ package com.student.backend.controller;
 import com.student.backend.dto.TaskCreateRequest;
 import com.student.backend.dto.TaskResponse;
 import com.student.backend.dto.TaskStatusPatchRequest;
+import com.student.backend.dto.TaskUpdateRequest;
 import com.student.backend.security.SecurityUtils;
 import com.student.backend.service.TaskService;
 import jakarta.validation.Valid;
@@ -59,10 +60,32 @@ public class TaskController {
         return ResponseEntity.ok(task);
     }
 
+    @PostMapping("/{id}/decline-self")
+    public ResponseEntity<TaskResponse> declineSelf(@PathVariable String id) {
+        String userId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(taskService.declineSelfFromTask(id, userId));
+    }
+
+    @PostMapping("/{id}/join-as-performer")
+    public ResponseEntity<TaskResponse> joinAsPerformer(@PathVariable String id) {
+        String userId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(taskService.joinAsPerformerOnTask(id, userId));
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<TaskResponse> updateTask(
+            @PathVariable String id,
+            @Valid @RequestBody TaskUpdateRequest request
+    ) {
+        String userId = securityUtils.getCurrentUserId();
+        TaskResponse task = taskService.updateTask(id, request, userId);
+        return ResponseEntity.ok(task);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(@PathVariable String id) {
-        String coordinatorId = securityUtils.getCurrentUserId();
-        taskService.deleteTask(id, coordinatorId);
+        String userId = securityUtils.getCurrentUserId();
+        taskService.deleteTask(id, userId);
         return ResponseEntity.noContent().build();
     }
 }

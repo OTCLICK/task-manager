@@ -1,21 +1,30 @@
 package com.student.backend.service;
 
 import com.student.backend.dto.EventCreateRequest;
+import com.student.backend.dto.EventPatchRequest;
 import com.student.backend.dto.EventResponse;
+import com.student.backend.dto.EventTaskReportResponse;
 import com.student.backend.dto.FullNameDto;
 import com.student.backend.dto.UserResponse;
 import com.student.backend.exception.AccessDeniedException;
 import com.student.backend.exception.NotFoundException;
 import com.student.backend.model.Event;
+import com.student.backend.model.EventStatus;
+import com.student.backend.model.Participation;
 import com.student.backend.model.User;
 import com.student.backend.model.UserRole;
+import com.student.backend.model.Task;
+import com.student.backend.model.TaskStatus;
 import com.student.backend.repository.EventRepository;
 import com.student.backend.repository.ParticipationRepository;
+import com.student.backend.repository.TaskRepository;
 import com.student.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -25,11 +34,21 @@ public class EventService {
     private final EventRepository eventRepository;
     private final UserRepository userRepository;
     private final ParticipationService participationService;
+    private final TaskRepository taskRepository;
+    private final ParticipationRepository participationRepository;
 
-    public EventService(EventRepository eventRepository, UserRepository userRepository, ParticipationService participationService) {
+    public EventService(
+            EventRepository eventRepository,
+            UserRepository userRepository,
+            ParticipationService participationService,
+            TaskRepository taskRepository,
+            ParticipationRepository participationRepository
+    ) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.participationService = participationService;
+        this.taskRepository = taskRepository;
+        this.participationRepository = participationRepository;
     }
 
     @Transactional(readOnly = true)
@@ -83,6 +102,51 @@ public class EventService {
             throw new AccessDeniedException("Недостаточно прав для удаления мероприятия");
         }
         eventRepository.deleteById(id);
+    }
+
+    public EventResponse patchEvent(String eventId, EventPatchRequest request, String userId) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
+        if (!event.getOrganizer().getId().equals(userId)) {
+            throw new AccessDeniedException("Только организатор мероприятия может менять статус");
+        }
+        event.setStatus(request.status());
+        return toEventResponse(eventRepository.save(event));
+    }
+
+    @Transactional(readOnly = true)
+    public EventTaskReportResponse getEventTaskReport(String eventId, String userId) {
+        Participation participation = participationRepository.findByUserIdAndEventId(userId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Нет доступа к мероприятию"));
+        if (participation.getRole() != UserRole.ORGANIZER && participation.getRole() != UserRole.COORDINATOR) {
+            throw new AccessDeniedException("Отчёт доступен только организатору и координатору");
+        }
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Мероприятие не найдено"));
+        List<Task> tasks = taskRepository.findAllByEventId(eventId);
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+        for (TaskStatus ts : TaskStatus.values()) {
+            byStatus.put(ts.name(), 0L);
+        }
+        for (Task t : tasks) {
+            byStatus.merge(t.getStatus().name(), 1L, Long::sum);
+        }
+        List<EventTaskReportResponse.TaskReportLine> lines = tasks.stream()
+                .map(t -> new EventTaskReportResponse.TaskReportLine(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getStatus().name(),
+                        t.getZone() != null ? t.getZone().getName() : null,
+                        t.getPerformers() != null ? t.getPerformers().size() : 0
+                ))
+                .collect(Collectors.toList());
+        return new EventTaskReportResponse(
+                event.getId(),
+                event.getName(),
+                event.getStatus(),
+                byStatus,
+                lines
+        );
     }
 
     private EventResponse toEventResponse(Event event) {

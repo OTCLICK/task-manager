@@ -4,6 +4,7 @@ package com.example.mobile.presentation.ui
 
 import android.content.ClipData
 import android.content.Context
+import android.content.Intent
 import android.view.DragEvent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -12,12 +13,13 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -72,9 +75,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.mobile.data.model.EventApiModel
+import com.example.mobile.data.model.EventTaskReportResponse
 import com.example.mobile.data.model.ParticipantApiModel
 import com.example.mobile.data.model.Task
 import com.example.mobile.data.model.Zone
+import com.example.mobile.presentation.EVENT_STATUS_OPTIONS
 import com.example.mobile.presentation.TASK_PRIORITY_OPTIONS
 import com.example.mobile.presentation.TASK_STATUS_OPTIONS
 import com.example.mobile.presentation.eventStatusRu
@@ -89,9 +95,27 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+
+private fun formatTaskReportPlainText(r: EventTaskReportResponse): String = buildString {
+    appendLine(r.eventName)
+    appendLine("Статус мероприятия: ${eventStatusRu(r.eventStatus)}")
+    appendLine()
+    appendLine("По статусам задач:")
+    r.tasksByStatus.entries.sortedBy { it.key }.forEach { (k, v) ->
+        appendLine("  ${taskStatusRu(k)}: $v")
+    }
+    appendLine()
+    appendLine("Список задач:")
+    r.tasks.forEach { t ->
+        val zn = t.zoneName?.takeIf { it.isNotBlank() } ?: "—"
+        appendLine("• ${t.title} — ${taskStatusRu(t.status)}, зона: $zn, исполнителей: ${t.performerCount}")
+    }
+}
+
 private const val ROLE_PERFORMER = "PERFORMER"
 
 private const val KANBAN_ROW_HEIGHT_DP = 392
+
 
 private val KANBAN_COLUMN_WIDTH = 176.dp
 
@@ -131,11 +155,71 @@ private fun formatTaskDeadlineForCard(deadline: String?): String? {
     return ldt?.format(taskDeadlineDisplayFormatter) ?: raw
 }
 
+private fun parseTaskDeadlineForForm(raw: String?): LocalDateTime? {
+    val s = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return runCatching { LocalDateTime.parse(s) }.getOrNull()
+        ?: runCatching { Instant.parse(s).atZone(ZoneId.systemDefault()).toLocalDateTime() }.getOrNull()
+}
+
+private sealed class TaskDialogKind {
+    data object Create : TaskDialogKind()
+    data class Edit(val task: Task) : TaskDialogKind()
+}
+
 private data class ZoneBoardDescriptor(
     val zoneId: String?,
     val title: String,
     val subtitle: String?
 )
+
+@Composable
+private fun EventSummaryCard(
+    event: EventApiModel,
+    canPatchEventStatus: Boolean,
+    onSelectEventStatus: (String) -> Unit
+) {
+    var eventStatusMenuOpen by remember { mutableStateOf(false) }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(12.dp)) {
+            Text(event.address, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Статус: ${eventStatusRu(event.status)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.clickable(enabled = canPatchEventStatus) {
+                            if (canPatchEventStatus) eventStatusMenuOpen = true
+                        }
+                    )
+                    DropdownMenu(
+                        expanded = eventStatusMenuOpen,
+                        onDismissRequest = { eventStatusMenuOpen = false }
+                    ) {
+                        EVENT_STATUS_OPTIONS.forEach { st ->
+                            DropdownMenuItem(
+                                text = { Text(eventStatusRu(st)) },
+                                onClick = {
+                                    eventStatusMenuOpen = false
+                                    if (st != event.status) onSelectEventStatus(st)
+                                }
+                            )
+                        }
+                    }
+                }
+                if (canPatchEventStatus) {
+                    TextButton(onClick = { eventStatusMenuOpen = true }) {
+                        Text("Статус")
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,6 +230,7 @@ fun EventDetailScreen(
     onOpenParticipants: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     val boardDescriptors = remember(state.zones, state.tasks) {
         if (state.tasks.isEmpty()) emptyList()
         else buildList {
@@ -192,7 +277,7 @@ fun EventDetailScreen(
         }
     }
     var showZoneDialog by remember { mutableStateOf(false) }
-    var showTaskDialog by remember { mutableStateOf(false) }
+    var taskDialogKind by remember { mutableStateOf<TaskDialogKind?>(null) }
     var taskToDelete by remember { mutableStateOf<String?>(null) }
 
     if (showZoneDialog) {
@@ -210,17 +295,36 @@ fun EventDetailScreen(
         )
     }
 
-    if (showTaskDialog) {
+    taskDialogKind?.let { kind ->
+        val existing = when (kind) {
+            is TaskDialogKind.Edit -> kind.task
+            is TaskDialogKind.Create -> null
+        }
         CreateTaskDialog(
             zones = state.zones,
             participants = state.participants,
+            existingTask = existing,
             onDismiss = {
-                showTaskDialog = false
+                taskDialogKind = null
                 viewModel.clearError()
             },
-            onConfirm = { title, desc, zoneId, priority, deadline, performerIds ->
-                viewModel.createTask(title, desc, zoneId, priority, deadline, performerIds) { ok ->
-                    if (ok) showTaskDialog = false
+            onConfirm = { editingId, title, desc, zoneId, priority, deadline, performerIds ->
+                if (editingId == null) {
+                    viewModel.createTask(title, desc, zoneId, priority, deadline, performerIds) { ok ->
+                        if (ok) taskDialogKind = null
+                    }
+                } else {
+                    viewModel.updateTask(
+                        editingId,
+                        title,
+                        desc,
+                        zoneId,
+                        priority,
+                        deadline,
+                        performerIds
+                    ) { ok ->
+                        if (ok) taskDialogKind = null
+                    }
                 }
             },
             errorText = state.formError
@@ -245,6 +349,68 @@ fun EventDetailScreen(
         )
     }
 
+    if (state.reportVisible) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissTaskReport() },
+            title = { Text("Отчёт по задачам") },
+            text = {
+                when {
+                    state.reportLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 120.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    state.reportError != null -> {
+                        Text(
+                            state.reportError ?: "",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    state.taskReport != null -> {
+                        val rep = state.taskReport!!
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 380.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = formatTaskReportPlainText(rep),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                    else -> {
+                        Text("Нет данных", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            dismissButton = {
+                state.taskReport?.let { rep ->
+                    TextButton(
+                        onClick = {
+                            val txt = formatTaskReportPlainText(rep)
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Отчёт: ${rep.eventName}")
+                                putExtra(Intent.EXTRA_TEXT, txt)
+                            }
+                            context.startActivity(Intent.createChooser(send, "Поделиться отчётом"))
+                        }
+                    ) { Text("Поделиться") }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissTaskReport() }) { Text("Закрыть") }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -255,6 +421,11 @@ fun EventDetailScreen(
                     }
                 },
                 actions = {
+                    if (state.canViewTaskReport) {
+                        TextButton(onClick = { viewModel.openTaskReport() }) {
+                            Text("Отчёт")
+                        }
+                    }
                     TextButton(onClick = onOpenParticipants) {
                         Text("Участники")
                     }
@@ -291,18 +462,12 @@ fun EventDetailScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                state.event?.let { ev ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text(ev.address, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "Статус: ${eventStatusRu(ev.status)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-                }
+                val ev = state.event ?: return@item
+                EventSummaryCard(
+                    event = ev,
+                    canPatchEventStatus = state.canPatchEventStatus,
+                    onSelectEventStatus = { viewModel.updateEventStatus(it) }
+                )
             }
 
             item {
@@ -343,18 +508,20 @@ fun EventDetailScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { showZoneDialog = true },
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Новая зона") }
-                    Button(
-                        onClick = { showTaskDialog = true },
-                        modifier = Modifier.weight(1f)
-                    ) { Text("Новая задача") }
+                if (state.canManageTasks) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { showZoneDialog = true },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Новая зона") }
+                        Button(
+                            onClick = { taskDialogKind = TaskDialogKind.Create },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Новая задача") }
+                    }
                 }
             }
 
@@ -367,11 +534,28 @@ fun EventDetailScreen(
                 }
             } else {
                 items(state.zones, key = { it.id }) { zone ->
+                    val muted = state.mutedZoneIds.contains(zone.id)
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp)) {
                             Text(zone.name, style = MaterialTheme.typography.titleSmall)
                             zone.description?.takeIf { it.isNotBlank() }?.let {
                                 Text(it, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = muted,
+                                    onCheckedChange = { viewModel.setZoneMuted(zone.id, it) }
+                                )
+                                Text(
+                                    "Не уведомлять о зоне (push)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
                             }
                         }
                     }
@@ -403,10 +587,16 @@ fun EventDetailScreen(
                     ZoneKanbanSwimlane(
                         descriptor = lane,
                         allTasks = state.tasks,
+                        canManageTasks = state.canManageTasks,
+                        currentUserId = state.currentUserId,
+                        isEventPerformer = state.isEventPerformer,
                         onStatusChange = { taskId, newStatus ->
                             viewModel.updateTaskStatus(taskId, newStatus)
                         },
-                        onDelete = { id -> taskToDelete = id }
+                        onEditTask = { task -> taskDialogKind = TaskDialogKind.Edit(task) },
+                        onDelete = { id -> taskToDelete = id },
+                        onDeclineSelf = { taskId -> viewModel.declineSelfFromTask(taskId) },
+                        onJoinTask = { taskId -> viewModel.joinTaskAsPerformer(taskId) }
                     )
                 }
             }
@@ -418,8 +608,14 @@ fun EventDetailScreen(
 private fun ZoneKanbanSwimlane(
     descriptor: ZoneBoardDescriptor,
     allTasks: List<Task>,
+    canManageTasks: Boolean,
+    currentUserId: String?,
+    isEventPerformer: Boolean,
     onStatusChange: (taskId: String, newStatus: String) -> Unit,
-    onDelete: (String) -> Unit
+    onEditTask: (Task) -> Unit,
+    onDelete: (String) -> Unit,
+    onDeclineSelf: (String) -> Unit,
+    onJoinTask: (String) -> Unit
 ) {
     val tasksInLane = remember(descriptor.zoneId, allTasks) {
         allTasks.filter { task ->
@@ -489,8 +685,14 @@ private fun ZoneKanbanSwimlane(
                         modifier = Modifier
                             .width(KANBAN_COLUMN_WIDTH)
                             .fillMaxHeight(),
+                        canManageTasks = canManageTasks,
+                        currentUserId = currentUserId,
+                        isEventPerformer = isEventPerformer,
                         onStatusChange = onStatusChange,
+                        onEditTask = onEditTask,
                         onDelete = onDelete,
+                        onDeclineSelf = onDeclineSelf,
+                        onJoinTask = onJoinTask,
                         onLaneDragMoved = onLaneDragMoved
                     )
                 }
@@ -506,8 +708,14 @@ private fun KanbanStatusColumn(
     /** Все задачи дорожки (зона): нужны, чтобы принять drop из другой колонки — там задача ещё со старым статусом. */
     laneTasks: List<Task>,
     modifier: Modifier = Modifier,
+    canManageTasks: Boolean,
+    currentUserId: String?,
+    isEventPerformer: Boolean,
     onStatusChange: (taskId: String, newStatus: String) -> Unit,
+    onEditTask: (Task) -> Unit,
     onDelete: (String) -> Unit,
+    onDeclineSelf: (String) -> Unit,
+    onJoinTask: (String) -> Unit,
     /** X палец/курсора в координатах окна (для симметричного автоскролла по краям видимой дорожки). */
     onLaneDragMoved: (dragXInWindow: Float) -> Unit
 ) {
@@ -592,10 +800,16 @@ private fun KanbanStatusColumn(
                         columnTasks.forEach { task ->
                             TaskKanbanCard(
                                 task = task,
+                                canManageTasks = canManageTasks,
+                                currentUserId = currentUserId,
+                                isEventPerformer = isEventPerformer,
+                                onEdit = { onEditTask(task) },
                                 onStatusChange = { newStatus ->
                                     if (newStatus != task.status) onStatusChange(task.id, newStatus)
                                 },
-                                onDelete = { onDelete(task.id) }
+                                onDelete = { onDelete(task.id) },
+                                onDeclineSelf = { onDeclineSelf(task.id) },
+                                onJoinTask = { onJoinTask(task.id) }
                             )
                         }
                     }
@@ -608,10 +822,20 @@ private fun KanbanStatusColumn(
 @Composable
 private fun TaskKanbanCard(
     task: Task,
+    canManageTasks: Boolean,
+    currentUserId: String?,
+    isEventPerformer: Boolean,
+    onEdit: () -> Unit,
     onStatusChange: (String) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onDeclineSelf: () -> Unit,
+    onJoinTask: () -> Unit
 ) {
     var statusMenuOpen by remember { mutableStateOf(false) }
+    val assigned = currentUserId != null && task.performers.any { it.id == currentUserId }
+    val joinableStatus = !task.status.equals("COMPLETED", ignoreCase = true)
+        && !task.status.equals("CANCELLED", ignoreCase = true)
+    val canJoin = isEventPerformer && !assigned && joinableStatus
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -640,15 +864,27 @@ private fun TaskKanbanCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.padding(start = 4.dp)
-                ) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = "Удалить задачу",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+                if (canManageTasks) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.padding(start = 2.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = "Редактировать задачу",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.padding(start = 2.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = "Удалить задачу",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
             task.description?.takeIf { it.isNotBlank() }?.let {
@@ -710,6 +946,31 @@ private fun TaskKanbanCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp)
                 )
+            }
+            if (assigned || canJoin) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (assigned) {
+                        TextButton(
+                            onClick = onDeclineSelf,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Снять себя", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    if (canJoin) {
+                        TextButton(
+                            onClick = onJoinTask,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Присоединиться", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
             }
         }
     }
@@ -804,26 +1065,46 @@ private fun CreateZoneDialog(
 private fun CreateTaskDialog(
     zones: List<Zone>,
     participants: List<ParticipantApiModel>,
+    existingTask: Task? = null,
     onDismiss: () -> Unit,
-    onConfirm: (title: String, description: String?, zoneId: String?, priority: String?, deadline: String?, performerIds: List<String>?) -> Unit,
+    onConfirm: (
+        editingTaskId: String?,
+        title: String,
+        description: String?,
+        zoneId: String?,
+        priority: String?,
+        deadline: String?,
+        performerIds: List<String>
+    ) -> Unit,
     errorText: String?
 ) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var deadlineAt by remember { mutableStateOf<LocalDateTime?>(null) }
-    var priority by remember { mutableStateOf("MEDIUM") }
+    val formKey = existingTask?.id ?: "new"
+    var title by remember(formKey) { mutableStateOf(existingTask?.title.orEmpty()) }
+    var description by remember(formKey) { mutableStateOf(existingTask?.description.orEmpty()) }
+    var deadlineAt by remember(formKey) { mutableStateOf(parseTaskDeadlineForForm(existingTask?.deadline)) }
+    var priority by remember(formKey) { mutableStateOf(existingTask?.priority?.uppercase() ?: "MEDIUM") }
     var priorityExpanded by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
-    var selectedZone by remember { mutableStateOf<Zone?>(null) }
-    var selectedPerformerIds by remember { mutableStateOf(setOf<String>()) }
+    var selectedZone by remember(formKey) {
+        mutableStateOf(
+            existingTask?.zone?.let { z ->
+                zones.find { it.id == z.id } ?: z
+            }
+        )
+    }
+    var selectedPerformerIds by remember(formKey) {
+        mutableStateOf(existingTask?.performers?.map { it.id }?.toSet() ?: emptySet())
+    }
 
     val performerCandidates = remember(participants) {
         participants.filter { it.role == ROLE_PERFORMER }
     }
 
+    val isEdit = existingTask != null
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Новая задача") },
+        title = { Text(if (isEdit) "Редактировать задачу" else "Новая задача") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -956,8 +1237,9 @@ private fun CreateTaskDialog(
             TextButton(
                 onClick = {
                     if (title.isNotBlank()) {
-                        val ids = selectedPerformerIds.toList().takeIf { it.isNotEmpty() }
+                        val ids = selectedPerformerIds.toList()
                         onConfirm(
+                            existingTask?.id,
                             title.trim(),
                             description.trim().takeIf { it.isNotEmpty() },
                             selectedZone?.id,
@@ -967,7 +1249,7 @@ private fun CreateTaskDialog(
                         )
                     }
                 }
-            ) { Text("Создать") }
+            ) { Text(if (isEdit) "Сохранить" else "Создать") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Отмена") }

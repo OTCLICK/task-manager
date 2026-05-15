@@ -10,7 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,17 +26,20 @@ public class TaskService {
     private final ZoneRepository zoneRepository;
     private final EventRepository eventRepository;
     private final ParticipationRepository participationRepository;
+    private final PushNotificationService pushNotificationService;
 
     public TaskService(TaskRepository taskRepository,
                        UserRepository userRepository,
                        ZoneRepository zoneRepository,
                        EventRepository eventRepository,
-                       ParticipationRepository participationRepository) {
+                       ParticipationRepository participationRepository,
+                       PushNotificationService pushNotificationService) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.zoneRepository = zoneRepository;
         this.eventRepository = eventRepository;
         this.participationRepository = participationRepository;
+        this.pushNotificationService = pushNotificationService;
     }
 
     @Transactional(readOnly = true)
@@ -126,7 +133,55 @@ public class TaskService {
         }
 
         Task savedTask = taskRepository.save(task);
+        pushTaskCreated(savedTask);
         return toTaskResponse(savedTask);
+    }
+
+    public TaskResponse updateTask(String taskId, TaskUpdateRequest request, String userId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Задача не найдена"));
+        String eventId = resolveEventId(task);
+        assertOrganizerOrCoordinator(userId, eventId);
+
+        Zone zone = null;
+        if (request.zoneId() != null) {
+            zone = zoneRepository.findById(request.zoneId())
+                    .orElseThrow(() -> new NotFoundException("Зона не найдена"));
+            if (!zone.getEvent().getId().equals(eventId)) {
+                throw new ValidationException("Зона не относится к этому мероприятию");
+            }
+        }
+
+        task.setTitle(request.title());
+        task.setDescription(request.description());
+        task.setPriority(request.taskPriority() != null ? request.taskPriority() : TaskPriority.MEDIUM);
+        task.setZone(zone);
+        task.setDeadline(request.deadline());
+
+        List<String> performerIds = request.performers() != null ? request.performers() : List.of();
+        if (performerIds.isEmpty()) {
+            task.getPerformers().clear();
+        } else {
+            List<User> performers = userRepository.findAllById(performerIds);
+            if (performers.size() != performerIds.size()) {
+                throw new NotFoundException("Один или несколько исполнителей не найдены");
+            }
+            for (String performerId : performerIds) {
+                Participation performerParticipation = participationRepository
+                        .findByUserIdAndEventId(performerId, eventId)
+                        .orElseThrow(() -> new ValidationException("Исполнитель не участвует в мероприятии"));
+                if (!UserRole.PERFORMER.equals(performerParticipation.getRole())) {
+                    throw new ValidationException("Исполнитель должен иметь роль PERFORMER в этом мероприятии");
+                }
+            }
+            task.getPerformers().clear();
+            task.getPerformers().addAll(performers);
+        }
+
+        task.setUpdatedAt(LocalDateTime.now());
+        Task saved = taskRepository.save(task);
+        pushTaskUpdated(saved);
+        return toTaskResponse(saved);
     }
 
     public TaskResponse updateTaskStatus(String taskId, TaskStatus newStatus, String userId) {
@@ -141,6 +196,58 @@ public class TaskService {
             task.setCompletedAt(null);
         }
         Task saved = taskRepository.save(task);
+        pushTaskStatus(saved, newStatus);
+        if (newStatus == TaskStatus.HELP_REQUESTED) {
+            pushHelpRequestedToOtherPerformers(saved);
+        }
+        return toTaskResponse(saved);
+    }
+
+    public TaskResponse declineSelfFromTask(String taskId, String userId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Задача не найдена"));
+        assertAssignedPerformer(userId, task);
+        task.getPerformers().removeIf(u -> u.getId().equals(userId));
+        task.setUpdatedAt(LocalDateTime.now());
+        Task saved = taskRepository.save(task);
+        User leaver = userRepository.findById(userId).orElse(null);
+        String who = leaver != null ? leaver.getEmail() : userId;
+        notifyCoordinatorTaskEvent(saved, "TASK_PERFORMER_LEFT", who + " снялся с задачи");
+        return toTaskResponse(saved);
+    }
+
+    public TaskResponse joinAsPerformerOnTask(String taskId, String userId) {
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Задача не найдена"));
+        String eventId = resolveEventId(task);
+        Participation participation = participationRepository.findByUserIdAndEventId(userId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+        if (participation.getRole() != UserRole.PERFORMER) {
+            throw new AccessDeniedException("Присоединиться к задаче может только исполнитель мероприятия");
+        }
+        if (task.getStatus() == TaskStatus.COMPLETED || task.getStatus() == TaskStatus.CANCELLED) {
+            throw new ValidationException("Нельзя присоединиться к завершённой или отменённой задаче");
+        }
+        if (task.getPerformers() != null
+                && task.getPerformers().stream().anyMatch(u -> u.getId().equals(userId))) {
+            return toTaskResponse(task);
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("Пользователь не найден"));
+        task.getPerformers().add(user);
+        task.setUpdatedAt(LocalDateTime.now());
+        Task saved = taskRepository.save(task);
+        String zoneId = zoneIdForMute(saved);
+        Map<String, String> data = baseTaskData(saved, "TASK_PERFORMER_JOINED");
+        data.put("joinedUserId", userId);
+        pushNotificationService.sendToUserRespectingZoneMute(
+                saved.getCoordinator().getId(), zoneId, "К задаче присоединился исполнитель", saved.getTitle(), data);
+        for (User peer : saved.getPerformers()) {
+            if (!peer.getId().equals(userId)) {
+                pushNotificationService.sendToUserRespectingZoneMute(
+                        peer.getId(), zoneId, "Новый исполнитель на задаче", saved.getTitle(), data);
+            }
+        }
         return toTaskResponse(saved);
     }
 
@@ -174,14 +281,118 @@ public class TaskService {
         throw new ValidationException("У задачи не задано мероприятие");
     }
 
-    public void deleteTask(String id, String coordinatorId) {
+    public void deleteTask(String id, String userId) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Задача не найдена"));
-
-        if (!task.getCoordinator().getId().equals(coordinatorId)) {
-            throw new AccessDeniedException("Недостаточно прав для удаления задачи");
-        }
+        String eventId = resolveEventId(task);
+        assertOrganizerOrCoordinator(userId, eventId);
         taskRepository.deleteById(id);
+    }
+
+    private void assertOrganizerOrCoordinator(String userId, String eventId) {
+        Participation participation = participationRepository.findByUserIdAndEventId(userId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+        if (participation.getRole() != UserRole.ORGANIZER && participation.getRole() != UserRole.COORDINATOR) {
+            throw new AccessDeniedException("Только организатор и координатор могут изменять задачи");
+        }
+    }
+
+    private void assertAssignedPerformer(String userId, Task task) {
+        String eventId = resolveEventId(task);
+        Participation participation = participationRepository.findByUserIdAndEventId(userId, eventId)
+                .orElseThrow(() -> new AccessDeniedException("Вы не участвуете в этом мероприятии"));
+        if (participation.getRole() != UserRole.PERFORMER) {
+            throw new AccessDeniedException("Только исполнитель может сняться с задачи");
+        }
+        boolean assigned = task.getPerformers() != null
+                && task.getPerformers().stream().anyMatch(u -> u.getId().equals(userId));
+        if (!assigned) {
+            throw new ValidationException("Вы не назначены на эту задачу");
+        }
+    }
+
+    private String zoneIdForMute(Task task) {
+        return task.getZone() != null ? task.getZone().getId() : null;
+    }
+
+    private Map<String, String> baseTaskData(Task task, String type) {
+        Map<String, String> m = new HashMap<>();
+        m.put("type", type);
+        m.put("eventId", resolveEventId(task));
+        m.put("taskId", task.getId());
+        m.put("zoneId", task.getZone() != null ? task.getZone().getId() : "");
+        m.put("title", task.getTitle() != null ? task.getTitle() : "");
+        return m;
+    }
+
+    private void pushTaskCreated(Task saved) {
+        if (saved.getPerformers() == null || saved.getPerformers().isEmpty()) {
+            return;
+        }
+        String z = zoneIdForMute(saved);
+        Map<String, String> data = baseTaskData(saved, "TASK_CREATED");
+        for (User p : saved.getPerformers()) {
+            pushNotificationService.sendToUserRespectingZoneMute(
+                    p.getId(), z, "Новая задача", saved.getTitle(), data);
+        }
+    }
+
+    private void pushTaskUpdated(Task saved) {
+        String z = zoneIdForMute(saved);
+        Map<String, String> data = baseTaskData(saved, "TASK_UPDATED");
+        if (saved.getPerformers() != null) {
+            for (User p : saved.getPerformers()) {
+                pushNotificationService.sendToUserRespectingZoneMute(
+                        p.getId(), z, "Задача обновлена", saved.getTitle(), data);
+            }
+        }
+        pushNotificationService.sendToUserRespectingZoneMute(
+                saved.getCoordinator().getId(), z, "Задача обновлена", saved.getTitle(), data);
+    }
+
+    private void pushTaskStatus(Task saved, TaskStatus newStatus) {
+        String z = zoneIdForMute(saved);
+        Map<String, String> data = baseTaskData(saved, "TASK_STATUS");
+        data.put("status", newStatus.name());
+        String body = saved.getTitle() + " → " + newStatus.name();
+        if (saved.getPerformers() != null) {
+            for (User p : saved.getPerformers()) {
+                pushNotificationService.sendToUserRespectingZoneMute(
+                        p.getId(), z, "Статус задачи", body, data);
+            }
+        }
+        pushNotificationService.sendToUserRespectingZoneMute(
+                saved.getCoordinator().getId(), z, "Статус задачи", body, data);
+    }
+
+    private void pushHelpRequestedToOtherPerformers(Task saved) {
+        String eventId = resolveEventId(saved);
+        String z = zoneIdForMute(saved);
+        Set<String> onTask = new HashSet<>();
+        if (saved.getPerformers() != null) {
+            for (User u : saved.getPerformers()) {
+                onTask.add(u.getId());
+            }
+        }
+        Map<String, String> data = baseTaskData(saved, "HELP_REQUESTED_TASK");
+        data.put("status", TaskStatus.HELP_REQUESTED.name());
+        String eventTitle = saved.getEvent() != null ? saved.getEvent().getName() : "Мероприятие";
+        String body = "Запрошена помощь: " + saved.getTitle();
+        for (Participation part : participationRepository.findByEvent_IdAndRole(eventId, UserRole.PERFORMER)) {
+            String uid = part.getUser().getId();
+            if (onTask.contains(uid)) {
+                continue;
+            }
+            pushNotificationService.sendToUserRespectingZoneMute(
+                    uid, z, eventTitle + ": нужна помощь", body, data);
+        }
+    }
+
+    private void notifyCoordinatorTaskEvent(Task task, String type, String body) {
+        String z = zoneIdForMute(task);
+        Map<String, String> data = baseTaskData(task, type);
+        pushNotificationService.sendToUserRespectingZoneMute(
+                task.getCoordinator().getId(), z, "Задача", body, data);
     }
 
     private TaskResponse toTaskResponse(Task task) {

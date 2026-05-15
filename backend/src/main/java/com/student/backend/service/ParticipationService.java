@@ -21,7 +21,9 @@ import com.student.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,17 +34,20 @@ public class ParticipationService {
     private final EventInvitationRepository invitationRepository;
     private final UserRepository userRepository;
     private final EventRepository eventRepository;
+    private final PushNotificationService pushNotificationService;
 
     public ParticipationService(
             ParticipationRepository participationRepository,
             EventInvitationRepository invitationRepository,
             UserRepository userRepository,
-            EventRepository eventRepository
+            EventRepository eventRepository,
+            PushNotificationService pushNotificationService
     ) {
         this.participationRepository = participationRepository;
         this.invitationRepository = invitationRepository;
         this.userRepository = userRepository;
         this.eventRepository = eventRepository;
+        this.pushNotificationService = pushNotificationService;
     }
 
     public void createOrganizerParticipation(String userId, String eventId) {
@@ -107,6 +112,17 @@ public class ParticipationService {
                 java.time.LocalDateTime.now()
         );
         invitationRepository.save(invitation);
+
+        Map<String, String> inviteData = new HashMap<>();
+        inviteData.put("type", "INVITATION");
+        inviteData.put("eventId", eventId);
+        inviteData.put("invitationId", invitation.getId());
+        pushNotificationService.sendToUser(
+                user.getId(),
+                "Приглашение в мероприятие",
+                formatUserLabel(inviter) + " пригласил вас в «" + event.getName() + "»",
+                inviteData
+        );
     }
 
     public void acceptInvitation(String eventId, String invitationId, String invitedUserId) {
@@ -135,6 +151,17 @@ public class ParticipationService {
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setRespondedAt(java.time.LocalDateTime.now());
         invitationRepository.save(invitation);
+
+        Map<String, String> acceptData = new HashMap<>();
+        acceptData.put("type", "INVITATION_ACCEPTED");
+        acceptData.put("eventId", eventId);
+        pushNotificationService.sendToUser(
+                invitation.getInvitedBy().getId(),
+                "Приглашение принято",
+                formatUserLabel(invitation.getInvitedUser()) + " принял приглашение в «"
+                        + invitation.getEvent().getName() + "»",
+                acceptData
+        );
     }
 
     public void declineInvitation(String eventId, String invitationId, String invitedUserId) {
@@ -315,5 +342,31 @@ public class ParticipationService {
                     );
                 })
                 .collect(Collectors.toList());
+    }
+
+    private static String formatUserLabel(User user) {
+        if (user.getFullName() == null) {
+            return user.getEmail();
+        }
+        String surname = user.getFullName().getSurname();
+        String name = user.getFullName().getName();
+        String patronymic = user.getFullName().getPatronymic();
+        StringBuilder sb = new StringBuilder();
+        if (surname != null && !surname.isBlank()) {
+            sb.append(surname.trim());
+        }
+        if (name != null && !name.isBlank()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(name.trim());
+        }
+        if (patronymic != null && !patronymic.isBlank()) {
+            sb.append(' ').append(patronymic.trim());
+        }
+        if (sb.length() == 0) {
+            return user.getEmail();
+        }
+        return sb.toString();
     }
 }

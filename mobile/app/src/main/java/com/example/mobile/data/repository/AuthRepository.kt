@@ -5,6 +5,7 @@ import com.example.mobile.data.model.*
 import com.example.mobile.utils.Resource
 import com.example.mobile.utils.TokenManager
 import com.example.mobile.utils.toUserFacingHttpError
+import kotlinx.coroutines.flow.firstOrNull
 
 class AuthRepository(
     private val tokenManager: TokenManager
@@ -55,6 +56,14 @@ class AuthRepository(
     }
 
     suspend fun logout() {
+        try {
+            val jwt = tokenManager.tokenFlow.firstOrNull()
+            if (jwt != null) {
+                // Без FCM на клиенте: сервер снимает все токены устройств этого пользователя.
+                ApiClient.createAuthorizedApiService(jwt).unregisterFcmToken(null)
+            }
+        } catch (_: Throwable) {
+        }
         tokenManager.clearToken()
     }
 }
