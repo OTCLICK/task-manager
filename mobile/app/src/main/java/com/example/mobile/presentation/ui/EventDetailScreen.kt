@@ -173,7 +173,7 @@ private data class ZoneBoardDescriptor(
 )
 
 @Composable
-private fun EventSummaryCard(
+internal fun EventSummaryCard(
     event: EventApiModel,
     canPatchEventStatus: Boolean,
     onSelectEventStatus: (String) -> Unit
